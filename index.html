@@ -153,51 +153,107 @@
             const currentMeta = imgMeta[currentWallKey];
 
             const handleWheel = (e) => {
-                if (page === 1) return;
-                e.preventDefault();
-                const zoomFactor = 1.15;
-                let newScale = transform.scale * (e.deltaY < 0 ? zoomFactor : 1 / zoomFactor);
-                newScale = Math.max(0.04, Math.min(newScale, 4));
-                setTransform(prev => ({ ...prev, scale: newScale }));
-            };
+				if (page === 1) return;
+				e.preventDefault();
+
+				if (!containerRef.current) return;
+				const rect = containerRef.current.getBoundingClientRect();
+				
+				// 🎯 마우스 커서의 현재 위치 계산
+				const mouseX = e.clientX - rect.left;
+				const mouseY = e.clientY - rect.top;
+
+				const zoomFactor = 1.15;
+				const currentScale = transform.scale;
+				let newScale = currentScale * (e.deltaY < 0 ? zoomFactor : 1 / zoomFactor);
+				newScale = Math.max(0.04, Math.min(newScale, 4));
+
+				// 🎯 커서 위치를 중심으로 좌표 변화값 역산 보정
+				setTransform(prev => {
+					const imgX = (mouseX - prev.x) / currentScale;
+					const imgY = (mouseY - prev.y) / currentScale;
+					return {
+						scale: newScale,
+						x: mouseX - imgX * newScale,
+						y: mouseY - imgY * newScale
+					};
+				});
+			};
 
             const handleStartDrag = (e) => {
-                if (page === 1) return;
-                isDragging.current = true;
-                const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-                const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-                dragStart.current = { x: clientX - transform.x, y: clientY - transform.y };
+				if (page === 1) return;
+				isDragging.current = true;
 
-                if (e.touches && e.touches.length === 2) {
-                    lastTouchDist.current = Math.hypot(
-                        e.touches[0].clientX - e.touches[1].clientX,
-                        e.touches[0].clientY - e.touches[1].clientY
-                    );
-                }
-            };
+				// 🎯 두 손가락 터치(핀치 줌) 시작 시 처리
+				if (e.touches && e.touches.length === 2) {
+					lastTouchDist.current = Math.hypot(
+						e.touches[0].clientX - e.touches[1].clientX,
+						e.touches[0].clientY - e.touches[1].clientY
+					);
+					if (containerRef.current) {
+						const rect = containerRef.current.getBoundingClientRect();
+						// 두 손가락의 중간 지점 좌표 저장
+						lastTouchCenter.current = {
+							x: ((e.touches[0].clientX + e.touches[1].clientX) / 2) - rect.left,
+							y: ((e.touches[0].clientY + e.touches[1].clientY) / 2) - rect.top
+						};
+					}
+					return;
+				}
+
+				const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+				const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+				dragStart.current = { x: clientX - transform.x, y: clientY - transform.y };
+			};
 
             const handleMoveDrag = (e) => {
-                if (!isDragging.current || page === 1) return;
+				if (!isDragging.current || page === 1) return;
 
-                if (e.touches && e.touches.length === 2) {
-                    const dist = Math.hypot(
-                        e.touches[0].clientX - e.touches[1].clientX,
-                        e.touches[0].clientY - e.touches[1].clientY
-                    );
-                    const delta = dist / lastTouchDist.current;
-                    lastTouchDist.current = dist;
-                    setTransform(prev => ({ ...prev, scale: Math.max(0.04, Math.min(prev.scale * delta, 4)) }));
-                    return;
-                }
+				// 🎯 스마트폰 멀티 터치 핀치 줌 중심점 기준 보정
+				if (e.touches && e.touches.length === 2) {
+					if (!containerRef.current) return;
+					const rect = containerRef.current.getBoundingClientRect();
 
-                const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-                const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-                setTransform(prev => ({
-                    ...prev,
-                    x: clientX - dragStart.current.x,
-                    y: clientY - dragStart.current.y
-                }));
-            };
+					const dist = Math.hypot(
+						e.touches[0].clientX - e.touches[1].clientX,
+						e.touches[0].clientY - e.touches[1].clientY
+					);
+					const currentCenterX = ((e.touches[0].clientX + e.touches[1].clientX) / 2) - rect.left;
+					const currentCenterY = ((e.touches[0].clientY + e.touches[1].clientY) / 2) - rect.top;
+
+					const deltaScale = dist / lastTouchDist.current;
+					lastTouchDist.current = dist;
+
+					setTransform(prev => {
+						let newScale = prev.scale * deltaScale;
+						newScale = Math.max(0.04, Math.min(newScale, 4));
+
+						// 손가락 중심점이 바라보고 있던 이미지 상의 원래 위치 계산
+						const imgX = (currentCenterX - prev.x) / prev.scale;
+						const imgY = (currentCenterY - prev.y) / prev.scale;
+
+						// 중심점을 고정한 채로 확대 비율 적용 및 드래그 이동 매핑
+						return {
+							scale: newScale,
+							x: currentCenterX - imgX * newScale,
+							y: currentCenterY - imgY * newScale
+						};
+					});
+
+					lastTouchCenter.current = { x: currentCenterX, y: currentCenterY };
+					return;
+				}
+
+				// 일반 한 손가락 화면 이동(드래그)
+				if (e.touches && e.touches.length > 2) return;
+				const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+				const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+				setTransform(prev => ({
+					...prev,
+					x: clientX - dragStart.current.x,
+					y: clientY - dragStart.current.y
+				}));
+			};
 
             const handleEndDrag = () => { isDragging.current = false; };
 
