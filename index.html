@@ -310,97 +310,109 @@
   };
 
   const handleSaveImage = () => {
-	  const img = imageRef.current;
-	  if (!img) return;
-	  if (!currentMeta.w || !currentMeta.h) return;
+    const img = imageRef.current;
+    if (!img) return;
+    if (!currentMeta.w || !currentMeta.h) return;
 
-	  const canvas = document.createElement("canvas");
-	  canvas.width = currentMeta.w;
-	  canvas.height = currentMeta.h;
-	  const ctx = canvas.getContext("2d");
+    const canvas = document.createElement("canvas");
+    canvas.width = currentMeta.w;
+    canvas.height = currentMeta.h;
+    const ctx = canvas.getContext("2d");
 
-	  ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
 
-	  ctx.fillStyle = "rgba(0,0,0,0.5)";
-	  ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = "rgba(0,0,0,0.5)";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-	  const activeWallSelection = selectedSegments[currentWallKey];
+    const activeWallSelection = selectedSegments[currentWallKey];
 
-	  currentSegments.forEach((seg) => {
-		const roleId = activeWallSelection[seg.id];
-		if (!roleId) return;
+    currentSegments.forEach((seg) => {
+      const roleId = activeWallSelection[seg.id];
+      if (!roleId) return;
 
-		const points = seg.points;
-		if (!points || points.length < 3) return;
+      const points = seg.points;
+      if (!points || points.length < 3) return;
 
-		ctx.save();
-		ctx.beginPath();
-		ctx.moveTo(points[0][0], points[0][1]);
-		for (let i = 1; i < points.length; i++) {
-		  ctx.lineTo(points[i][0], points[i][1]);
-		}
-		ctx.closePath();
-		ctx.clip();
-		ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-		ctx.restore();
+      ctx.save();
+      ctx.beginPath();
+      ctx.moveTo(points[0][0], points[0][1]);
+      for (let i = 1; i < points.length; i++) {
+        ctx.lineTo(points[i][0], points[i][1]);
+      }
+      ctx.closePath();
+      ctx.clip();
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      ctx.restore();
 
-		ctx.save();
-		ctx.beginPath();
-		ctx.moveTo(points[0][0], points[0][1]);
-		for (let i = 1; i < points.length; i++) {
-		  ctx.lineTo(points[i][0], points[i][1]);
-		}
-		ctx.closePath();
+      ctx.save();
+      ctx.beginPath();
+      ctx.moveTo(points[0][0], points[0][1]);
+      for (let i = 1; i < points.length; i++) {
+        ctx.lineTo(points[i][0], points[i][1]);
+      }
+      ctx.closePath();
 
-		ctx.strokeStyle = "rgba(255,255,255,0.25)";
-		ctx.lineWidth = 3;
-		ctx.stroke();
+      ctx.strokeStyle = "rgba(255,255,255,0.25)";
+      ctx.lineWidth = 3;
+      ctx.stroke();
 
-		ctx.strokeStyle = "#ffffff";
-		ctx.lineWidth = 5;
-		ctx.stroke();
+      ctx.strokeStyle = "#ffffff";
+      ctx.lineWidth = 5;
+      ctx.stroke();
 
-		const roleConfig = ROLES[roleId];
-		ctx.strokeStyle = roleConfig.color;
-		ctx.lineWidth = 10;
-		ctx.stroke();
+      const roleConfig = ROLES[roleId];
+      ctx.strokeStyle = roleConfig.color;
+      ctx.lineWidth = 10;
+      ctx.stroke();
 
-		if (roleConfig.label) {
-          // Y값이 가장 큰 점(가장 아래 점) 찾기
-          const bottomPoint = points.reduce((maxP, p) => p[1] > maxP[1] ? p : maxP, points[0]);
-          const bottomX = bottomPoint[0];
-          const bottomY = bottomPoint[1];
-          const isLabelHighlight = roleId === "START" || roleId === "TOP";
+      if (roleConfig.label) {
+        // Y값이 가장 큰 점(가장 아래 점) 찾기
+        const bottomPoint = points.reduce((maxP, p) => p[1] > maxP[1] ? p : maxP, points[0]);
+        const bottomX = bottomPoint[0];
+        const bottomY = bottomPoint[1];
+        const isLabelHighlight = roleId === "START" || roleId === "TOP";
 
-          ctx.fillStyle = roleConfig.color;
-          ctx.font = "bold 100px sans-serif";
-          ctx.textAlign = "center"; // 글자를 가운데 정렬
+        ctx.fillStyle = roleConfig.color;
+        ctx.font = "bold 100px sans-serif";
+        ctx.textAlign = "center"; // 글자 가운데 정렬
 
-          if (isLabelHighlight) {
-            ctx.shadowColor = "rgba(255,255,255,0.95)";
-            ctx.shadowBlur = 18;
-            ctx.strokeStyle = "rgba(0,0,0,0.35)";
-            ctx.lineWidth = 8;
-            // bottomY + 100은 홀드 아래쪽으로 100픽셀 여백을 준 것입니다.
-            ctx.strokeText(roleConfig.label, bottomX, bottomY + 100);
-          }
-
-          ctx.fillText(roleConfig.label, bottomX, bottomY + 100);
+        if (isLabelHighlight) {
+          ctx.shadowColor = "rgba(255,255,255,0.95)";
+          ctx.shadowBlur = 18;
+          ctx.strokeStyle = "rgba(0,0,0,0.35)";
+          ctx.lineWidth = 8;
+          ctx.strokeText(roleConfig.label, bottomX, bottomY + 100);
         }
 
-		ctx.restore();
-	  });
+        ctx.fillText(roleConfig.label, bottomX, bottomY + 100);
+      }
 
-	  try {
-		const dataUrl = canvas.toDataURL("image/jpeg", 0.95);
-		const link = document.createElement("a");
-		link.download = `Cracker_${currentWallKey}_Problem.jpg`;
-		link.href = dataUrl;
-		link.click();
-	  } catch (err) {
-		alert("Save failed");
-	  }
-	};
+      ctx.restore();
+    });
+
+    try {
+      const dataUrl = canvas.toDataURL("image/jpeg", 0.95);
+      const link = document.createElement("a");
+
+      // 날짜 구하기 (가장 안전한 일반 문자열 더하기 방식 사용)
+      const now = new Date();
+      const year = now.getFullYear();
+      const month = String(now.getMonth() + 1).padStart(2, '0');
+      const date = String(now.getDate()).padStart(2, '0');
+      const hours = String(now.getHours()).padStart(2, '0');
+      const minutes = String(now.getMinutes()).padStart(2, '0');
+      const seconds = String(now.getSeconds()).padStart(2, '0');
+      
+      const timeStamp = year + month + date + "_" + hours + minutes + seconds;
+
+      // 파일명 설정
+      link.download = "Cracker_" + currentWallKey + "_" + timeStamp + ".jpg";
+      link.href = dataUrl;
+      link.click();
+    } catch (err) {
+      alert("Save failed");
+    }
+  };
 
   if ((page === 2 || page === 3) && currentMeta.w === 0) {
     return e("div", { style: styles.appContainer }, e("div", { style: { color: "#fff", padding: 20 } }, "Loading images..."));
