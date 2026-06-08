@@ -331,14 +331,11 @@
     ctx.fillStyle = "rgba(0,0,0,0.5)";
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-    const activeWallSelection = selectedSegments[currentWallKey];
-
+    // const activeWallSelection = selectedSegments[currentWallKey];
+    const activeWallSelection = selectedSegments[currentWallKey] || {};
     currentSegments.forEach((seg) => {
       const roleId = activeWallSelection[seg.id];
-      if (!roleId) {
-        alert("Save failed 3");
-        return;
-      }
+      if (!roleId) return;
 
       const points = seg.points;
       if (!points || points.length < 3) {
@@ -403,11 +400,7 @@
       ctx.restore();
     });
 
-    try {
-      const dataUrl = canvas.toDataURL("image/jpeg", 0.95);
-      const link = document.createElement("a");
-
-      // 날짜 구하기 (가장 안전한 일반 문자열 더하기 방식 사용)
+    // 날짜 구하기 (가장 안전한 일반 문자열 더하기 방식 사용)
       const now = new Date();
       const year = now.getFullYear();
       const month = String(now.getMonth() + 1).padStart(2, '0');
@@ -418,6 +411,9 @@
       
       const timeStamp = year + month + date + "_" + hours + minutes + seconds;
 
+    try {
+      const dataUrl = canvas.toDataURL("image/jpeg", 0.95);
+      const link = document.createElement("a");
       // 파일명 설정
       link.download = "Cracker_" + currentWallKey + "_" + timeStamp + ".jpg";
       link.href = dataUrl;
