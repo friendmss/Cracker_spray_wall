@@ -309,10 +309,17 @@
     });
   };
 
+  // debug msg added
   const handleSaveImage = () => {
     const img = imageRef.current;
-    if (!img) return;
-    if (!currentMeta.w || !currentMeta.h) return;
+    if (!img) {
+        alert("Save failed 1");
+        return;
+      }
+    if (!currentMeta.w || !currentMeta.h) {
+        alert("Save failed 2");
+        return;
+      }
 
     const canvas = document.createElement("canvas");
     canvas.width = currentMeta.w;
@@ -328,10 +335,16 @@
 
     currentSegments.forEach((seg) => {
       const roleId = activeWallSelection[seg.id];
-      if (!roleId) return;
+      if (!roleId) {
+        alert("Save failed 3");
+        return;
+      }
 
       const points = seg.points;
-      if (!points || points.length < 3) return;
+      if (!points || points.length < 3) {
+        alert("Save failed 4");
+        return;
+      }
 
       ctx.save();
       ctx.beginPath();
