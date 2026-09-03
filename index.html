@@ -35,10 +35,10 @@
     const e = React.createElement;
 
     const IMAGES = {
-      wallA: "./Wall_A_0828.jpg",
-      wallB: "./Wall_B_0828.jpg",
-      wallAsel: "./Wall_A_sel.jpg",
-      wallBsel: "./Wall_B_sel.jpg",
+      wallR: "./Wall_R.jpg",
+      wallL: "./Wall_L.jpg",
+      wallRsel: "./Wall_R_sel.jpg",
+      wallLsel: "./Wall_L_sel.jpg",
       logo: "./Cracker_logo.jpg",
       back: "./Back.jpg",
       start: "./Start.jpg",
@@ -58,16 +58,16 @@
       const [page, setPage] = useState(1);
       const [currentRole, setCurrentRole] = useState("START");
       const [selectedSegments, setSelectedSegments] = useState({
-        wallA: {},
-        wallB: {},
+        wallR: {},
+        wallL: {},
       });
       const [geoData, setGeoData] = useState({
-        wallA: [],
-        wallB: [],
+        wallR: [],
+        wallL: [],
       });
       const [imgMeta, setImgMeta] = useState({
-        wallA: { w: 0, h: 0 },
-        wallB: { w: 0, h: 0 },
+        wallR: { w: 0, h: 0 },
+        wallL: { w: 0, h: 0 },
       });
 
       const imageRef = useRef(null);
@@ -126,19 +126,19 @@
       useEffect(() => {
         const fetchAndLoadData = async () => {
           try {
-            const metaA = await loadImageMeta(IMAGES.wallA);
-            const metaB = await loadImageMeta(IMAGES.wallB);
-            setImgMeta({ wallA: metaA, wallB: metaB });
+            const metaA = await loadImageMeta(IMAGES.wallR);
+            const metaB = await loadImageMeta(IMAGES.wallL);
+            setImgMeta({ wallR: metaA, wallL: metaB });
 
-            const resA = await fetch("./Wall_A_0828.json");
+            const resA = await fetch("./Wall_R.json");
             const dataA = await resA.json();
 
-            const resB = await fetch("./Wall_B_0828.json");
+            const resB = await fetch("./Wall_L.json");
             const dataB = await resB.json();
 
             setGeoData({
-              wallA: parseCocoData(dataA),
-              wallB: parseCocoData(dataB)
+              wallR: parseCocoData(dataA),
+              wallL: parseCocoData(dataB)
             });
           } catch (err) {
             console.error("데이터 로드 실패:", err);
@@ -148,8 +148,8 @@
         fetchAndLoadData();
       }, []);
 
-      const currentWallKey = page === 2 ? "wallA" : "wallB";
-      const currentWallImg = page === 2 ? IMAGES.wallA : IMAGES.wallB;
+      const currentWallKey = page === 2 ? "wallR" : "wallL";
+      const currentWallImg = page === 2 ? IMAGES.wallR : IMAGES.wallL;
       const currentSegments = geoData[currentWallKey];
       const currentMeta = imgMeta[currentWallKey];
 
@@ -442,8 +442,8 @@
               e(
                 "div",
                 { style: styles.menuGrid },
-                e("div", { style: styles.card, onClick: () => setPage(2) }, e("img", { src: IMAGES.wallAsel, alt: "Spray Wall A", style: styles.cardImage })),
-                e("div", { style: styles.card, onClick: () => setPage(3) }, e("img", { src: IMAGES.wallBsel, alt: "Spray Wall B", style: styles.cardImage }))
+                e("div", { style: styles.card, onClick: () => setPage(2) }, e("img", { src: IMAGES.wallRsel, alt: "Spray Wall A", style: styles.cardImage })),
+                e("div", { style: styles.card, onClick: () => setPage(3) }, e("img", { src: IMAGES.wallLsel, alt: "Spray Wall B", style: styles.cardImage }))
               )
             )
           : null;
