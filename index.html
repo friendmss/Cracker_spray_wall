@@ -28,585 +28,593 @@
   <div id="root"></div>
 
   <script>
-    // =========================
-    //  test ver 1.0 raw 파일 분리
+	// ver 2.0
+	// Change download logic
 	
-};
-  </script>
-
-  <script>
     const { useState, useRef, useEffect } = React;
     const e = React.createElement;
 
     const IMAGES = {
-	  wallA: "./Wall_A_0828.jpg",
-	  wallB: "./Wall_B_0828.jpg",
-	  wallAsel: "./Wall_A_sel.jpg",
-	  wallBsel: "./Wall_B_sel.jpg",
-	  logo	: "./Cracker_logo.jpg",
-	  back	: "./Back.jpg",
-	  start	: "./Start.jpg",
-	  hold	: "./Hold_foot.jpg",
-	  top	: "./Top.jpg",
-	  reset	: "./reset.jpg",
-	  save	: "./Save.jpg"
+      wallA: "./Wall_A_0828.jpg",
+      wallB: "./Wall_B_0828.jpg",
+      wallAsel: "./Wall_A_sel.jpg",
+      wallBsel: "./Wall_B_sel.jpg",
+      logo: "./Cracker_logo.jpg",
+      back: "./Back.jpg",
+      start: "./Start.jpg",
+      hold: "./Hold_foot.jpg",
+      top: "./Top.jpg",
+      reset: "./reset.jpg",
+      save: "./Save.jpg"
     };
 
     const ROLES = {
       START: { id: "START", color: "#01ff2b", label: "Start", highlight: true },
       HOLD: { id: "HOLD", color: "#ffff00", label: "" },
-      // FOOT: { id: "FOOT", color: "#01f9ff", label: "" },
       TOP: { id: "TOP", color: "#fd49f0", label: "Top", highlight: true },
     };
 
     function App() {
-  const [page, setPage] = useState(1);
-  const [currentRole, setCurrentRole] = useState("START");
-  const [selectedSegments, setSelectedSegments] = useState({
-    wallA: {},
-    wallB: {},
-  });
-  const [geoData, setGeoData] = useState({
-    wallA: [],
-    wallB: [],
-  });
-  const [imgMeta, setImgMeta] = useState({
-    wallA: { w: 0, h: 0 },
-    wallB: { w: 0, h: 0 },
-  });
-
-  const imageRef = useRef(null);
-  const containerRef = useRef(null);
-  const isDragging = useRef(false);
-  const dragStart = useRef({ x: 0, y: 0 });
-  const lastTouchDist = useRef(0);
-  const lastTouchCenter = useRef({ x: 0, y: 0 });
-
-  const [transform, setTransform] = useState({
-    x: 0,
-    y: 0,
-    scale: 0.18,
-  });
-
-  const loadImageMeta = (src) => {
-    return new Promise((resolve, reject) => {
-      const img = new Image();
-      img.onload = () => resolve({ w: img.naturalWidth, h: img.naturalHeight });
-      img.onerror = reject;
-      img.src = src;
-    });
-  };
-
-  const parseCocoData = (jsonData) => {
-    if (!jsonData || !jsonData.annotations) return [];
-    const parsedList = jsonData.annotations.map((ann) => {
-      const flatPoints = ann.segmentation?.[0] || [];
-      const pairedPoints = [];
-      for (let i = 0; i < flatPoints.length; i += 2) {
-        if (flatPoints[i] !== undefined && flatPoints[i + 1] !== undefined) {
-          pairedPoints.push([flatPoints[i], flatPoints[i + 1]]);
-        }
-      }
-
-      let area = ann.area || 0;
-      if (area === 0 && pairedPoints.length >= 3) {
-        let sum = 0;
-        for (let i = 0; i < pairedPoints.length; i++) {
-          const j = (i + 1) % pairedPoints.length;
-          sum += pairedPoints[i][0] * pairedPoints[j][1] - pairedPoints[j][0] * pairedPoints[i][1];
-        }
-        area = Math.abs(sum / 2);
-      }
-
-      return {
-        id: ann.id,
-        points: pairedPoints,
-        area,
-      };
-    });
-
-    return parsedList.sort((a, b) => b.area - a.area);
-  };
-
-  useEffect(() => {
-	  const fetchAndLoadData = async () => {
-		try {
-		  // 1. 이미지 메타데이터 로드
-		  const metaA = await loadImageMeta(IMAGES.wallA);
-		  const metaB = await loadImageMeta(IMAGES.wallB);
-		  setImgMeta({ wallA: metaA, wallB: metaB });
-
-		  // 2. 같은 디렉토리의 JSON 파일들 fetch
-		  const resA = await fetch("./Wall_A_0828.json");
-		  const dataA = await resA.json();
-		  
-		  const resB = await fetch("./Wall_B_0828.json");
-		  const dataB = await resB.json();
-
-		  // 3. 파싱 후 상태 업데이트
-		  setGeoData({
-			wallA: parseCocoData(dataA),
-			wallB: parseCocoData(dataB)
-		  });
-		} catch (err) {
-		  console.error("데이터 로드 실패:", err);
-		}
-	  };
-
-	  fetchAndLoadData();
-	}, []); // 마운트 시 1회만 실행
-
-  
-  const currentWallKey = page === 2 ? "wallA" : "wallB";
-  const currentWallImg = page === 2 ? IMAGES.wallA : IMAGES.wallB;
-  const currentSegments = geoData[currentWallKey];
-  const currentMeta = imgMeta[currentWallKey];
-
-  const isHighlightRole = currentRole === "START" || currentRole === "TOP";
-
-  const highlightStyle = {
-    textShadow: "0 0 4px rgba(255,255,255,0.95), 0 0 10px rgba(255,255,255,0.7), 0 0 16px rgba(255,255,255,0.45)",
-    WebkitTextStroke: "1px rgba(0,0,0,0.35)",
-    paintOrder: "stroke fill",
-  };
-
-  useEffect(() => {
-    if ((page === 2 || page === 3) && currentMeta.w > 0 && currentMeta.h > 0) {
-      setTimeout(() => {
-        if (containerRef.current) {
-          const cw = containerRef.current.clientWidth;
-          const ch = containerRef.current.clientHeight;
-          const baseScale = 0.18;
-          setTransform({
-            x: cw / 2 - (currentMeta.w * baseScale) / 2,
-            y: ch / 2 - (currentMeta.h * baseScale) / 2,
-            scale: baseScale,
-          });
-        }
-      }, 50);
-    }
-  }, [page, currentMeta.w, currentMeta.h]);
-
-  const handleWheel = (e) => {
-    if (page === 1) return;
-    e.preventDefault();
-    if (!containerRef.current) return;
-
-    const rect = containerRef.current.getBoundingClientRect();
-    const mouseX = e.clientX - rect.left;
-    const mouseY = e.clientY - rect.top;
-    const zoomFactor = 1.15;
-    const currentScale = transform.scale;
-    let newScale = currentScale * (e.deltaY > 0 ? zoomFactor : 1 / zoomFactor);
-    newScale = Math.max(0.04, Math.min(newScale, 4));
-
-    setTransform((prev) => {
-      const imgX = (mouseX - prev.x) / currentScale;
-      const imgY = (mouseY - prev.y) / currentScale;
-      return {
-        scale: newScale,
-        x: mouseX - imgX * newScale,
-        y: mouseY - imgY * newScale,
-      };
-    });
-  };
-
-  const handleStartDrag = (e) => {
-    if (page === 1) return;
-    isDragging.current = true;
-
-    if (e.touches && e.touches.length === 2) {
-      lastTouchDist.current = Math.hypot(
-        e.touches[0].clientX - e.touches[1].clientX,
-        e.touches[0].clientY - e.touches[1].clientY
-      );
-      if (containerRef.current) {
-        const rect = containerRef.current.getBoundingClientRect();
-        lastTouchCenter.current = {
-          x: (e.touches[0].clientX + e.touches[1].clientX) / 2 - rect.left,
-          y: (e.touches[0].clientY + e.touches[1].clientY) / 2 - rect.top,
-        };
-      }
-      return;
-    }
-
-    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-    dragStart.current = {
-      x: clientX - transform.x,
-      y: clientY - transform.y,
-    };
-  };
-
-  const handleMoveDrag = (e) => {
-    if (page === 1) return;
-
-    if (e.touches && e.touches.length === 2) {
-      if (!containerRef.current) return;
-      const rect = containerRef.current.getBoundingClientRect();
-      const dist = Math.hypot(
-        e.touches[0].clientX - e.touches[1].clientX,
-        e.touches[0].clientY - e.touches[1].clientY
-      );
-      const currentCenterX = (e.touches[0].clientX + e.touches[1].clientX) / 2 - rect.left;
-      const currentCenterY = (e.touches[0].clientY + e.touches[1].clientY) / 2 - rect.top;
-      const deltaScale = dist / lastTouchDist.current;
-      lastTouchDist.current = dist;
-
-      setTransform((prev) => {
-        let newScale = prev.scale * deltaScale;
-        newScale = Math.max(0.04, Math.min(newScale, 4));
-        const imgX = (currentCenterX - prev.x) / prev.scale;
-        const imgY = (currentCenterY - prev.y) / prev.scale;
-        return {
-          scale: newScale,
-          x: currentCenterX - imgX * newScale,
-          y: currentCenterY - imgY * newScale,
-        };
+      const [page, setPage] = useState(1);
+      const [currentRole, setCurrentRole] = useState("START");
+      const [selectedSegments, setSelectedSegments] = useState({
+        wallA: {},
+        wallB: {},
       });
-      lastTouchCenter.current = { x: currentCenterX, y: currentCenterY };
-      return;
-    }
+      const [geoData, setGeoData] = useState({
+        wallA: [],
+        wallB: [],
+      });
+      const [imgMeta, setImgMeta] = useState({
+        wallA: { w: 0, h: 0 },
+        wallB: { w: 0, h: 0 },
+      });
 
-    if (!isDragging.current) return;
+      const imageRef = useRef(null);
+      const containerRef = useRef(null);
+      const isDragging = useRef(false);
+      const dragStart = useRef({ x: 0, y: 0 });
+      const lastTouchDist = useRef(0);
+      const lastTouchCenter = useRef({ x: 0, y: 0 });
 
-    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+      const [transform, setTransform] = useState({
+        x: 0,
+        y: 0,
+        scale: 0.18,
+      });
 
-    setTransform((prev) => ({
-      ...prev,
-      x: clientX - dragStart.current.x,
-      y: clientY - dragStart.current.y,
-    }));
-  };
+      const loadImageMeta = (src) => {
+        return new Promise((resolve, reject) => {
+          const img = new Image();
+          img.onload = () => resolve({ w: img.naturalWidth, h: img.naturalHeight });
+          img.onerror = reject;
+          img.src = src;
+        });
+      };
 
-  const handleEndDrag = () => {
-    isDragging.current = false;
-  };
+      const parseCocoData = (jsonData) => {
+        if (!jsonData || !jsonData.annotations) return [];
+        const parsedList = jsonData.annotations.map((ann) => {
+          const flatPoints = ann.segmentation?.[0] || [];
+          const pairedPoints = [];
+          for (let i = 0; i < flatPoints.length; i += 2) {
+            if (flatPoints[i] !== undefined && flatPoints[i + 1] !== undefined) {
+              pairedPoints.push([flatPoints[i], flatPoints[i + 1]]);
+            }
+          }
 
-  const handleSegmentClick = (segId, e) => {
-    e.stopPropagation();
-    setSelectedSegments((prev) => {
-      const wallSet = { ...prev[currentWallKey] };
-      if (wallSet[segId]) delete wallSet[segId];
-      else wallSet[segId] = currentRole;
-      return { ...prev, [currentWallKey]: wallSet };
-    });
-  };
+          let area = ann.area || 0;
+          if (area === 0 && pairedPoints.length >= 3) {
+            let sum = 0;
+            for (let i = 0; i < pairedPoints.length; i++) {
+              const j = (i + 1) % pairedPoints.length;
+              sum += pairedPoints[i][0] * pairedPoints[j][1] - pairedPoints[j][0] * pairedPoints[i][1];
+            }
+            area = Math.abs(sum / 2);
+          }
 
+          return {
+            id: ann.id,
+            points: pairedPoints,
+            area,
+          };
+        });
 
-   const handleReset = () => {
-	setSelectedSegments((prev) => ({
-	  ...prev,
-	  [currentWallKey]: {}
-	}));
-  };
+        return parsedList.sort((a, b) => b.area - a.area);
+      };
 
-  // debug msg added
-  const handleSaveImage = () => {
-    const img = imageRef.current;
-    if (!img) {
-        alert("Save failed 1");
-        return;
-      }
-    if (!currentMeta.w || !currentMeta.h) {
-        alert("Save failed 2");
-        return;
-      }
+      useEffect(() => {
+        const fetchAndLoadData = async () => {
+          try {
+            const metaA = await loadImageMeta(IMAGES.wallA);
+            const metaB = await loadImageMeta(IMAGES.wallB);
+            setImgMeta({ wallA: metaA, wallB: metaB });
 
-    const canvas = document.createElement("canvas");
-    canvas.width = currentMeta.w;
-    canvas.height = currentMeta.h;
-    const ctx = canvas.getContext("2d");
+            const resA = await fetch("./Wall_A_0828.json");
+            const dataA = await resA.json();
 
-    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+            const resB = await fetch("./Wall_B_0828.json");
+            const dataB = await resB.json();
 
-    ctx.fillStyle = "rgba(0,0,0,0.5)";
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
+            setGeoData({
+              wallA: parseCocoData(dataA),
+              wallB: parseCocoData(dataB)
+            });
+          } catch (err) {
+            console.error("데이터 로드 실패:", err);
+          }
+        };
 
-    // const activeWallSelection = selectedSegments[currentWallKey];
-    const activeWallSelection = selectedSegments[currentWallKey] || {};
-    currentSegments.forEach((seg) => {
-      const roleId = activeWallSelection[seg.id];
-      if (!roleId) return;
+        fetchAndLoadData();
+      }, []);
 
-      const points = seg.points;
-      if (!points || points.length < 3) {
-        alert("Save failed 4");
-        return;
-      }
+      const currentWallKey = page === 2 ? "wallA" : "wallB";
+      const currentWallImg = page === 2 ? IMAGES.wallA : IMAGES.wallB;
+      const currentSegments = geoData[currentWallKey];
+      const currentMeta = imgMeta[currentWallKey];
 
-      ctx.save();
-      ctx.beginPath();
-      ctx.moveTo(points[0][0], points[0][1]);
-      for (let i = 1; i < points.length; i++) {
-        ctx.lineTo(points[i][0], points[i][1]);
-      }
-      ctx.closePath();
-      ctx.clip();
-      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-      ctx.restore();
+      const isHighlightRole = currentRole === "START" || currentRole === "TOP";
 
-      ctx.save();
-      ctx.beginPath();
-      ctx.moveTo(points[0][0], points[0][1]);
-      for (let i = 1; i < points.length; i++) {
-        ctx.lineTo(points[i][0], points[i][1]);
-      }
-      ctx.closePath();
+      const highlightStyle = {
+        textShadow: "0 0 4px rgba(255,255,255,0.95), 0 0 10px rgba(255,255,255,0.7), 0 0 16px rgba(255,255,255,0.45)",
+        WebkitTextStroke: "1px rgba(0,0,0,0.35)",
+        paintOrder: "stroke fill",
+      };
 
-      ctx.strokeStyle = "rgba(255,255,255,0.25)";
-      ctx.lineWidth = 3;
-      ctx.stroke();
+      useEffect(() => {
+        if ((page === 2 || page === 3) && currentMeta.w > 0 && currentMeta.h > 0) {
+          setTimeout(() => {
+            if (containerRef.current) {
+              const cw = containerRef.current.clientWidth;
+              const ch = containerRef.current.clientHeight;
+              const baseScale = 0.18;
+              setTransform({
+                x: cw / 2 - (currentMeta.w * baseScale) / 2,
+                y: ch / 2 - (currentMeta.h * baseScale) / 2,
+                scale: baseScale,
+              });
+            }
+          }, 50);
+        }
+      }, [page, currentMeta.w, currentMeta.h]);
 
-      ctx.strokeStyle = "#ffffff";
-      ctx.lineWidth = 5;
-      ctx.stroke();
+      const handleWheel = (e) => {
+        if (page === 1) return;
+        e.preventDefault();
+        if (!containerRef.current) return;
 
-      const roleConfig = ROLES[roleId];
-      ctx.strokeStyle = roleConfig.color;
-      ctx.lineWidth = 10;
-      ctx.stroke();
+        const rect = containerRef.current.getBoundingClientRect();
+        const mouseX = e.clientX - rect.left;
+        const mouseY = e.clientY - rect.top;
+        const zoomFactor = 1.15;
+        const currentScale = transform.scale;
+        let newScale = currentScale * (e.deltaY > 0 ? zoomFactor : 1 / zoomFactor);
+        newScale = Math.max(0.04, Math.min(newScale, 4));
 
-      if (roleConfig.label) {
-        // Y값이 가장 큰 점(가장 아래 점) 찾기
-        const bottomPoint = points.reduce((maxP, p) => p[1] > maxP[1] ? p : maxP, points[0]);
-        const bottomX = bottomPoint[0];
-        const bottomY = bottomPoint[1];
-        const isLabelHighlight = roleId === "START" || roleId === "TOP";
+        setTransform((prev) => {
+          const imgX = (mouseX - prev.x) / currentScale;
+          const imgY = (mouseY - prev.y) / currentScale;
+          return {
+            scale: newScale,
+            x: mouseX - imgX * newScale,
+            y: mouseY - imgY * newScale,
+          };
+        });
+      };
 
-        ctx.fillStyle = roleConfig.color;
-        ctx.font = "bold 100px sans-serif";
-        ctx.textAlign = "center"; // 글자 가운데 정렬
+      const handleStartDrag = (e) => {
+        if (page === 1) return;
+        isDragging.current = true;
 
-        if (isLabelHighlight) {
-          ctx.shadowColor = "rgba(255,255,255,0.95)";
-          ctx.shadowBlur = 18;
-          ctx.strokeStyle = "rgba(0,0,0,0.35)";
-          ctx.lineWidth = 8;
-          ctx.strokeText(roleConfig.label, bottomX, bottomY + 100);
+        if (e.touches && e.touches.length === 2) {
+          lastTouchDist.current = Math.hypot(
+            e.touches[0].clientX - e.touches[1].clientX,
+            e.touches[0].clientY - e.touches[1].clientY
+          );
+          if (containerRef.current) {
+            const rect = containerRef.current.getBoundingClientRect();
+            lastTouchCenter.current = {
+              x: (e.touches[0].clientX + e.touches[1].clientX) / 2 - rect.left,
+              y: (e.touches[0].clientY + e.touches[1].clientY) / 2 - rect.top,
+            };
+          }
+          return;
         }
 
-        ctx.fillText(roleConfig.label, bottomX, bottomY + 100);
+        const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+        const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+        dragStart.current = {
+          x: clientX - transform.x,
+          y: clientY - transform.y,
+        };
+      };
+
+      const handleMoveDrag = (e) => {
+        if (page === 1) return;
+
+        if (e.touches && e.touches.length === 2) {
+          if (!containerRef.current) return;
+          const rect = containerRef.current.getBoundingClientRect();
+          const dist = Math.hypot(
+            e.touches[0].clientX - e.touches[1].clientX,
+            e.touches[0].clientY - e.touches[1].clientY
+          );
+          const currentCenterX = (e.touches[0].clientX + e.touches[1].clientX) / 2 - rect.left;
+          const currentCenterY = (e.touches[0].clientY + e.touches[1].clientY) / 2 - rect.top;
+          const deltaScale = dist / lastTouchDist.current;
+          lastTouchDist.current = dist;
+
+          setTransform((prev) => {
+            let newScale = prev.scale * deltaScale;
+            newScale = Math.max(0.04, Math.min(newScale, 4));
+            const imgX = (currentCenterX - prev.x) / prev.scale;
+            const imgY = (currentCenterY - prev.y) / prev.scale;
+            return {
+              scale: newScale,
+              x: currentCenterX - imgX * newScale,
+              y: currentCenterY - imgY * newScale,
+            };
+          });
+          lastTouchCenter.current = { x: currentCenterX, y: currentCenterY };
+          return;
+        }
+
+        if (!isDragging.current) return;
+
+        const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+        const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+
+        setTransform((prev) => ({
+          ...prev,
+          x: clientX - dragStart.current.x,
+          y: clientY - dragStart.current.y,
+        }));
+      };
+
+      const handleEndDrag = () => {
+        isDragging.current = false;
+      };
+
+      const handleSegmentClick = (segId, e) => {
+        e.stopPropagation();
+        setSelectedSegments((prev) => {
+          const wallSet = { ...prev[currentWallKey] };
+          if (wallSet[segId]) delete wallSet[segId];
+          else wallSet[segId] = currentRole;
+          return { ...prev, [currentWallKey]: wallSet };
+        });
+      };
+
+      const handleReset = () => {
+        setSelectedSegments((prev) => ({
+          ...prev,
+          [currentWallKey]: {}
+        }));
+      };
+
+      const handleSaveImage = () => {
+        const img = imageRef.current;
+        if (!img) {
+            alert("Save failed 1");
+            return;
+          }
+        if (!currentMeta.w || !currentMeta.h) {
+            alert("Save failed 2");
+            return;
+          }
+
+        const canvas = document.createElement("canvas");
+        canvas.width = currentMeta.w;
+        canvas.height = currentMeta.h;
+        const ctx = canvas.getContext("2d");
+
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+        ctx.fillStyle = "rgba(0,0,0,0.5)";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        const activeWallSelection = selectedSegments[currentWallKey] || {};
+        currentSegments.forEach((seg) => {
+          const roleId = activeWallSelection[seg.id];
+          if (!roleId) return;
+
+          const points = seg.points;
+          if (!points || points.length < 3) {
+            alert("Save failed 4");
+            return;
+          }
+
+          ctx.save();
+          ctx.beginPath();
+          ctx.moveTo(points[0][0], points[0][1]);
+          for (let i = 1; i < points.length; i++) {
+            ctx.lineTo(points[i][0], points[i][1]);
+          }
+          ctx.closePath();
+          ctx.clip();
+          ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+          ctx.restore();
+
+          ctx.save();
+          ctx.beginPath();
+          ctx.moveTo(points[0][0], points[0][1]);
+          for (let i = 1; i < points.length; i++) {
+            ctx.lineTo(points[i][0], points[i][1]);
+          }
+          ctx.closePath();
+
+          ctx.strokeStyle = "rgba(255,255,255,0.25)";
+          ctx.lineWidth = 3;
+          ctx.stroke();
+
+          ctx.strokeStyle = "#ffffff";
+          ctx.lineWidth = 5;
+          ctx.stroke();
+
+          const roleConfig = ROLES[roleId];
+          ctx.strokeStyle = roleConfig.color;
+          ctx.lineWidth = 10;
+          ctx.stroke();
+
+          if (roleConfig.label) {
+            const bottomPoint = points.reduce((maxP, p) => p[1] > maxP[1] ? p : maxP, points[0]);
+            const bottomX = bottomPoint[0];
+            const bottomY = bottomPoint[1];
+            const isLabelHighlight = roleId === "START" || roleId === "TOP";
+
+            ctx.fillStyle = roleConfig.color;
+            ctx.font = "bold 100px sans-serif";
+            ctx.textAlign = "center";
+
+            if (isLabelHighlight) {
+              ctx.shadowColor = "rgba(255,255,255,0.95)";
+              ctx.shadowBlur = 18;
+              ctx.strokeStyle = "rgba(0,0,0,0.35)";
+              ctx.lineWidth = 8;
+              ctx.strokeText(roleConfig.label, bottomX, bottomY + 100);
+            }
+
+            ctx.fillText(roleConfig.label, bottomX, bottomY + 100);
+          }
+
+          ctx.restore();
+        });
+
+        const now = new Date();
+        const year = now.getFullYear();
+        const month = String(now.getMonth() + 1).padStart(2, '0');
+        const date = String(now.getDate()).padStart(2, '0');
+        const hours = String(now.getHours()).padStart(2, '0');
+        const minutes = String(now.getMinutes()).padStart(2, '0');
+        const seconds = String(now.getSeconds()).padStart(2, '0');
+
+        const timeStamp = year + month + date + "_" + hours + minutes + seconds;
+        const fileName = "Cracker_" + currentWallKey + "_" + timeStamp + ".jpg";
+
+        try {
+          canvas.toBlob((blob) => {
+            if (!blob) {
+              alert("Save failed: Empty canvas");
+              return;
+            }
+
+            const file = new File([blob], fileName, { type: "image/jpeg" });
+
+            if (navigator.canShare && navigator.canShare({ files: [file] })) {
+              navigator.share({
+                files: [file],
+                title: fileName
+              }).catch((err) => {
+                console.log("Share cancelled or failed", err);
+              });
+            } else {
+              const objectUrl = URL.createObjectURL(blob);
+              const link = document.createElement("a");
+              link.href = objectUrl;
+              link.download = fileName;
+
+              document.body.appendChild(link);
+              link.click();
+              document.body.removeChild(link);
+
+              URL.revokeObjectURL(objectUrl);
+            }
+          }, "image/jpeg", 0.95);
+        } catch (err) {
+          alert("Save failed");
+        }
+      };
+
+      if ((page === 2 || page === 3) && currentMeta.w === 0) {
+        return e("div", { style: styles.appContainer }, e("div", { style: { color: "#fff", padding: 20 } }, "Loading images..."));
       }
 
-      ctx.restore();
-    });
+      const menuContent =
+        page === 1
+          ? e(
+              "div",
+              { style: styles.menuPage },
+              e(
+                "div",
+                { style: styles.menuGrid },
+                e("div", { style: styles.card, onClick: () => setPage(2) }, e("img", { src: IMAGES.wallAsel, alt: "Spray Wall A", style: styles.cardImage })),
+                e("div", { style: styles.card, onClick: () => setPage(3) }, e("img", { src: IMAGES.wallBsel, alt: "Spray Wall B", style: styles.cardImage }))
+              )
+            )
+          : null;
 
-    // 날짜 구하기 (가장 안전한 일반 문자열 더하기 방식 사용)
-      const now = new Date();
-      const year = now.getFullYear();
-      const month = String(now.getMonth() + 1).padStart(2, '0');
-      const date = String(now.getDate()).padStart(2, '0');
-      const hours = String(now.getHours()).padStart(2, '0');
-      const minutes = String(now.getMinutes()).padStart(2, '0');
-      const seconds = String(now.getSeconds()).padStart(2, '0');
-      
-      const timeStamp = year + month + date + "_" + hours + minutes + seconds;
-
-    try {
-      const dataUrl = canvas.toDataURL("image/jpeg", 0.95);
-      const link = document.createElement("a");
-      // 파일명 설정
-      link.download = "Cracker_" + currentWallKey + "_" + timeStamp + ".jpg";
-      link.href = dataUrl;
-      link.click();
-    } catch (err) {
-      alert("Save failed");
-    }
-  };
-
-  if ((page === 2 || page === 3) && currentMeta.w === 0) {
-    return e("div", { style: styles.appContainer }, e("div", { style: { color: "#fff", padding: 20 } }, "Loading images..."));
-  }
-
-  const menuContent =
-    page === 1
-      ? e(
-          "div",
-          { style: styles.menuPage },
-          e(
+      const editorContent =
+      (page === 2 || page === 3) && currentMeta.w > 0 && currentMeta.h > 0
+        ? e(
             "div",
-            { style: styles.menuGrid },
-            e("div", { style: styles.card, onClick: () => setPage(2) }, e("img", { src: IMAGES.wallAsel, alt: "Spray Wall A", style: styles.cardImage })),
-            e("div", { style: styles.card, onClick: () => setPage(3) }, e("img", { src: IMAGES.wallBsel, alt: "Spray Wall B", style: styles.cardImage }))
-          )
-        )
-      : null;
-
-  const editorContent =
-  (page === 2 || page === 3) && currentMeta.w > 0 && currentMeta.h > 0
-    ? e(
-        "div",
-        { style: styles.editorPage },
-        e(
-          "div",
-          { style: styles.topMenuBar },
-          e("button", { onClick: () => setPage(1), style: styles.navButton }, e("img", { src: IMAGES.back, alt: "Back", style: styles.btnImg })),
-          e("button", { onClick: () => setCurrentRole("START"), style: Object.assign({}, styles.navButton, currentRole === "START" ? styles.activeBtn : {}) }, e("img", { src: IMAGES.start, alt: "Start", style: styles.btnImg })),
-          e("button", { onClick: () => setCurrentRole("HOLD"), style: Object.assign({}, styles.navButton, currentRole === "HOLD" ? styles.activeBtn : {}) }, e("img", { src: IMAGES.hold, alt: "Hold", style: styles.btnImg })),
-          e("button", { onClick: () => setCurrentRole("TOP"), style: Object.assign({}, styles.navButton, currentRole === "TOP" ? styles.activeBtn : {}) }, e("img", { src: IMAGES.top, alt: "Top", style: styles.btnImg })),
-          e("button", { onClick: handleReset, style: styles.navButton }, e("img", { src: IMAGES.reset, alt: "Reset", style: styles.btnImg })),
-		  e("button", { onClick: handleSaveImage, style: styles.navButton }, e("img", { src: IMAGES.save, alt: "Save", style: styles.btnImg }))
-        ),
-        e(
-          "div",
-          {
-            ref: containerRef,
-            style: styles.canvasContainer,
-            onWheel: handleWheel,
-            onMouseDown: handleStartDrag,
-            onMouseMove: handleMoveDrag,
-            onMouseUp: handleEndDrag,
-            onMouseLeave: handleEndDrag,
-            onTouchStart: handleStartDrag,
-            onTouchMove: handleMoveDrag,
-            onTouchEnd: handleEndDrag,
-          },
-          e(
-            "div",
-            {
-              style: {
-                transform: `translate(${transform.x}px, ${transform.y}px) scale(${transform.scale})`,
-                transformOrigin: "0 0",
-                position: "relative",
-                transition: isDragging.current ? "none" : "transform 0.05s ease-out",
-                width: `${currentMeta.w}px`,
-                height: `${currentMeta.h}px`,
-              },
-            },
-            e("img", {
-              ref: imageRef,
-              src: currentWallImg,
-              alt: "Base Wall",
-              style: {
-                display: "block",
-                userSelect: "none",
-                width: `${currentMeta.w}px`,
-                height: `${currentMeta.h}px`,
-              },
-              draggable: false,
-            }),
+            { style: styles.editorPage },
             e(
-              "svg",
+              "div",
+              { style: styles.topMenuBar },
+              e("button", { onClick: () => setPage(1), style: styles.navButton }, e("img", { src: IMAGES.back, alt: "Back", style: styles.btnImg })),
+              e("button", { onClick: () => setCurrentRole("START"), style: Object.assign({}, styles.navButton, currentRole === "START" ? styles.activeBtn : {}) }, e("img", { src: IMAGES.start, alt: "Start", style: styles.btnImg })),
+              e("button", { onClick: () => setCurrentRole("HOLD"), style: Object.assign({}, styles.navButton, currentRole === "HOLD" ? styles.activeBtn : {}) }, e("img", { src: IMAGES.hold, alt: "Hold", style: styles.btnImg })),
+              e("button", { onClick: () => setCurrentRole("TOP"), style: Object.assign({}, styles.navButton, currentRole === "TOP" ? styles.activeBtn : {}) }, e("img", { src: IMAGES.top, alt: "Top", style: styles.btnImg })),
+              e("button", { onClick: handleReset, style: styles.navButton }, e("img", { src: IMAGES.reset, alt: "Reset", style: styles.btnImg })),
+              e("button", { onClick: handleSaveImage, style: styles.navButton }, e("img", { src: IMAGES.save, alt: "Save", style: styles.btnImg }))
+            ),
+            e(
+              "div",
               {
-                style: styles.svgOverlay,
-                viewBox: `0 0 ${currentMeta.w} ${currentMeta.h}`,
-                preserveAspectRatio: "none",
+                ref: containerRef,
+                style: styles.canvasContainer,
+                onWheel: handleWheel,
+                onMouseDown: handleStartDrag,
+                onMouseMove: handleMoveDrag,
+                onMouseUp: handleEndDrag,
+                onMouseLeave: handleEndDrag,
+                onTouchStart: handleStartDrag,
+                onTouchMove: handleMoveDrag,
+                onTouchEnd: handleEndDrag,
               },
               e(
-                "defs",
-                null,
+                "div",
+                {
+                  style: {
+                    transform: `translate(${transform.x}px, ${transform.y}px) scale(${transform.scale})`,
+                    transformOrigin: "0 0",
+                    position: "relative",
+                    transition: isDragging.current ? "none" : "transform 0.05s ease-out",
+                    width: `${currentMeta.w}px`,
+                    height: `${currentMeta.h}px`,
+                  },
+                },
+                e("img", {
+                  ref: imageRef,
+                  src: currentWallImg,
+                  alt: "Base Wall",
+                  style: {
+                    display: "block",
+                    userSelect: "none",
+                    width: `${currentMeta.w}px`,
+                    height: `${currentMeta.h}px`,
+                  },
+                  draggable: false,
+                }),
                 e(
-                  "mask",
-                  { id: `holdMask-${currentWallKey}` },
+                  "svg",
+                  {
+                    style: styles.svgOverlay,
+                    viewBox: `0 0 ${currentMeta.w} ${currentMeta.h}`,
+                    preserveAspectRatio: "none",
+                  },
+                  e(
+                    "defs",
+                    null,
+                    e(
+                      "mask",
+                      { id: `holdMask-${currentWallKey}` },
+                      e("rect", {
+                        x: 0,
+                        y: 0,
+                        width: currentMeta.w,
+                        height: currentMeta.h,
+                        fill: "white",
+                      }),
+                      currentSegments.map((seg) => {
+                        const selectedRole = selectedSegments[currentWallKey][seg.id];
+                        if (!selectedRole) return null;
+                        const pointsStr = seg.points.map((p) => `${p[0]},${p[1]}`).join(" ");
+                        return e("polygon", {
+                          key: `mask-${seg.id}`,
+                          points: pointsStr,
+                          fill: "black",
+                        });
+                      })
+                    )
+                  ),
                   e("rect", {
                     x: 0,
                     y: 0,
                     width: currentMeta.w,
                     height: currentMeta.h,
-                    fill: "white",
+                    fill: "rgba(0,0,0,0.5)",
+                    mask: `url(#holdMask-${currentWallKey})`,
                   }),
                   currentSegments.map((seg) => {
                     const selectedRole = selectedSegments[currentWallKey][seg.id];
-                    if (!selectedRole) return null;
                     const pointsStr = seg.points.map((p) => `${p[0]},${p[1]}`).join(" ");
-                    return e("polygon", {
-                      key: `mask-${seg.id}`,
-                      points: pointsStr,
-                      fill: "black",
-                    });
+                    const bottomPoint = seg.points.reduce((maxP, p) => p[1] > maxP[1] ? p : maxP, seg.points[0]);
+                    const bottomX = bottomPoint[0];
+                    const bottomY = bottomPoint[1];
+                    const isSelectedHighlight = selectedRole === "START" || selectedRole === "TOP";
+
+                    return e(
+                      "g",
+                      {
+                        key: seg.id,
+                        onClick: (ev) => handleSegmentClick(seg.id, ev),
+                        style: { cursor: "pointer" },
+                      },
+                      selectedRole
+                        ? [
+                            e("polygon", {
+                              key: "a",
+                              points: pointsStr,
+                              fill: "rgba(255,255,255,0.01)",
+                              stroke: "rgba(255,255,255,0.25)",
+                              strokeWidth: 3,
+                            }),
+                            e("polygon", {
+                              key: "b",
+                              points: pointsStr,
+                              fill: "none",
+                              stroke: "#ffffff",
+                              strokeWidth: 3,
+                            }),
+                            e("polygon", {
+                              key: "c",
+                              points: pointsStr,
+                              fill: "none",
+                              stroke: ROLES[selectedRole].color,
+                              strokeWidth: 3,
+                            }),
+                            ROLES[selectedRole].label
+                              ? e(
+                                  "text",
+                                  {
+                                    key: "d",
+                                    x: bottomX,
+                                    y: bottomY + 80,
+                                    fill: ROLES[selectedRole].color,
+                                    fontSize: 100,
+                                    fontWeight: "bold",
+                                    style: Object.assign(
+                                      { textAnchor: "middle" },
+                                      isSelectedHighlight ? highlightStyle : {}
+                                    ),
+                                  },
+                                  ROLES[selectedRole].label
+                                )
+                              : null,
+                          ]
+                        : e("polygon", {
+                            points: pointsStr,
+                            fill: "rgba(255,255,255,0.01)",
+                            stroke: "rgba(255,255,255,0.35)",
+                            strokeWidth: 3,
+                          })
+                    );
                   })
                 )
-              ),
-              e("rect", {
-                x: 0,
-                y: 0,
-                width: currentMeta.w,
-                height: currentMeta.h,
-                fill: "rgba(0,0,0,0.5)",
-                mask: `url(#holdMask-${currentWallKey})`,
-              }),
-              currentSegments.map((seg) => {
-                const selectedRole = selectedSegments[currentWallKey][seg.id];
-                const pointsStr = seg.points.map((p) => `${p[0]},${p[1]}`).join(" ");
-                // Y값이 가장 큰 점(가장 아래 점) 찾기
-                const bottomPoint = seg.points.reduce((maxP, p) => p[1] > maxP[1] ? p : maxP, seg.points[0]);
-                const bottomX = bottomPoint[0];
-                const bottomY = bottomPoint[1];
-                const isSelectedHighlight = selectedRole === "START" || selectedRole === "TOP";
-
-                return e(
-                  "g",
-                  {
-                    key: seg.id,
-                    onClick: (ev) => handleSegmentClick(seg.id, ev),
-                    style: { cursor: "pointer" },
-                  },
-                  selectedRole
-                    ? [
-                        e("polygon", {
-                          key: "a",
-                          points: pointsStr,
-                          fill: "rgba(255,255,255,0.01)",
-                          stroke: "rgba(255,255,255,0.25)",
-                          strokeWidth: 3,
-                        }),
-                        e("polygon", {
-                          key: "b",
-                          points: pointsStr,
-                          fill: "none",
-                          stroke: "#ffffff",
-                          strokeWidth: 3,
-                        }),
-                        e("polygon", {
-                          key: "c",
-                          points: pointsStr,
-                          fill: "none",
-                          stroke: ROLES[selectedRole].color,
-                          strokeWidth: 3,
-                        }),
-                        ROLES[selectedRole].label
-                          ? e(
-                              "text",
-                              {
-                                key: "d",
-                                x: bottomX,      // 가장 아래 점의 X 좌표
-                                y: bottomY + 80, // 홀드 아래쪽으로 80픽셀 여백
-                                fill: ROLES[selectedRole].color,
-                                fontSize: 100,
-                                fontWeight: "bold",
-                                style: Object.assign(
-                                  { textAnchor: "middle" }, // 글자 가운데 정렬
-                                  isSelectedHighlight ? highlightStyle : {}
-                                ),
-                              },
-                              ROLES[selectedRole].label
-                            )
-                          : null,
-                      ]
-                    : e("polygon", {
-                        points: pointsStr,
-                        fill: "rgba(255,255,255,0.01)",
-                        stroke: "rgba(255,255,255,0.35)",
-                        strokeWidth: 3,
-                      })
-                );
-              })
+              )
             )
           )
-        )
-      )
-    : null;
+        : null;
 
-  return e(
-    "div",
-    { style: styles.appContainer },
-    menuContent,
-    editorContent,
-    e("div", { style: styles.footerBar }, e("img", { src: IMAGES.logo, alt: "CRACKER CLIMBING", style: styles.logoImage }))
-  );
-}
+      return e(
+        "div",
+        { style: styles.appContainer },
+        menuContent,
+        editorContent,
+        e("div", { style: styles.footerBar }, e("img", { src: IMAGES.logo, alt: "CRACKER CLIMBING", style: styles.logoImage }))
+      );
+    }
 
     const styles = {
       appContainer: {
