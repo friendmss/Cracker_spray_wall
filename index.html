@@ -400,7 +400,11 @@
 
             const file = new File([blob], fileName, { type: "image/jpeg" });
 
-            if (navigator.canShare && navigator.canShare({ files: [file] })) {
+            const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || 
+                          (navigator.userAgent.includes("Mac") && "ontouchend" in document);
+
+            // iOS이면서 Web Share API를 지원하는 경우에만 공유 팝업 띄우기
+            if (isIOS && navigator.canShare && navigator.canShare({ files: [file] })) {
               navigator.share({
                 files: [file],
                 title: fileName
@@ -408,15 +412,16 @@
                 console.log("Share cancelled or failed", err);
               });
             } else {
+              // PC, 안드로이드 등 나머지 환경에서는 바로 다운로드
               const objectUrl = URL.createObjectURL(blob);
               const link = document.createElement("a");
               link.href = objectUrl;
               link.download = fileName;
-
+              
               document.body.appendChild(link);
               link.click();
               document.body.removeChild(link);
-
+              
               URL.revokeObjectURL(objectUrl);
             }
           }, "image/jpeg", 0.95);
