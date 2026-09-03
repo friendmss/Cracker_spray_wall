@@ -43,12 +43,13 @@
 	  wallB: "./Wall_B_0828.jpg",
 	  wallAsel: "./Wall_A_sel.jpg",
 	  wallBsel: "./Wall_B_sel.jpg",
-	  logo: "./Cracker_logo.jpg",
-	  back: "./Back.jpg",
-	  start: "./Start.jpg",
-	  hold: "./Hold_foot.jpg",
-	  top: "./Top.jpg",
-	  save: "./Save.jpg"
+	  logo	: "./Cracker_logo.jpg",
+	  back	: "./Back.jpg",
+	  start	: "./Start.jpg",
+	  hold	: "./Hold_foot.jpg",
+	  top	: "./Top.jpg",
+	  reset	: "./reset.jpg",
+	  save	: "./Save.jpg"
     };
 
     const ROLES = {
@@ -293,6 +294,14 @@
     });
   };
 
+
+   const handleReset = () => {
+	setSelectedSegments((prev) => ({
+	  ...prev,
+	  [currentWallKey]: {}
+	}));
+  };
+
   // debug msg added
   const handleSaveImage = () => {
     const img = imageRef.current;
@@ -436,9 +445,9 @@
           e("button", { onClick: () => setPage(1), style: styles.navButton }, e("img", { src: IMAGES.back, alt: "Back", style: styles.btnImg })),
           e("button", { onClick: () => setCurrentRole("START"), style: Object.assign({}, styles.navButton, currentRole === "START" ? styles.activeBtn : {}) }, e("img", { src: IMAGES.start, alt: "Start", style: styles.btnImg })),
           e("button", { onClick: () => setCurrentRole("HOLD"), style: Object.assign({}, styles.navButton, currentRole === "HOLD" ? styles.activeBtn : {}) }, e("img", { src: IMAGES.hold, alt: "Hold", style: styles.btnImg })),
-          // e("button", { onClick: () => setCurrentRole("FOOT"), style: Object.assign({}, styles.navButton, currentRole === "FOOT" ? styles.activeBtn : {}) }, e("img", { src: IMAGES.foot, alt: "Foot", style: styles.btnImg })),
           e("button", { onClick: () => setCurrentRole("TOP"), style: Object.assign({}, styles.navButton, currentRole === "TOP" ? styles.activeBtn : {}) }, e("img", { src: IMAGES.top, alt: "Top", style: styles.btnImg })),
-          e("button", { onClick: handleSaveImage, style: styles.navButton }, e("img", { src: IMAGES.save, alt: "Save", style: styles.btnImg }))
+          e("button", { onClick: handleReset, style: styles.navButton }, e("img", { src: IMAGES.reset, alt: "Reset", style: styles.btnImg })),
+		  e("button", { onClick: handleSaveImage, style: styles.navButton }, e("img", { src: IMAGES.save, alt: "Save", style: styles.btnImg }))
         ),
         e(
           "div",
