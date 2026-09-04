@@ -5,7 +5,7 @@
     "description": "Exported from roboflow.com",
     "contributor": "",
     "url": "https://public.roboflow.com/object-detection/undefined",
-    "date_created": "2026-09-03T07:00:44+00:00"
+    "date_created": "2026-09-04T02:14:41+00:00"
   },
   "licenses": [
     {
@@ -33,7 +33,7 @@
       "file_name": "WALL_B_0828_jpg.rf.xR7FIPyPBJywrY0ciRC1.jpg",
       "height": 6114,
       "width": 5862,
-      "date_captured": "2026-09-03T07:00:44+00:00",
+      "date_captured": "2026-09-04T02:14:41+00:00",
       "extra": {
         "name": "WALL_B_0828.jpg"
       }
@@ -9625,11 +9625,11 @@
       "bbox": [
         1684.28,
         4197.37,
-        47.18,
+        47.19,
         176.43
       ],
       "iscrowd": 0,
-      "area": 8323.967,
+      "area": 8325.732,
       "segmentation": [
         [
           1694.538,
@@ -12585,13 +12585,13 @@
       "image_id": 1,
       "category_id": 1,
       "bbox": [
-        148.31,
+        148.3,
         3526,
-        525.69,
+        525.7,
         634
       ],
       "iscrowd": 0,
-      "area": 333287.46,
+      "area": 333293.8,
       "segmentation": [
         [
           163,
@@ -15577,6 +15577,41 @@
           1983.309,
           90.018,
           1701.639
+        ]
+      ]
+    },
+    {
+      "id": 560,
+      "image_id": 1,
+      "category_id": 1,
+      "bbox": [
+        2217.02,
+        2691.93,
+        99.3,
+        101.88
+      ],
+      "iscrowd": 0,
+      "area": 10116.684,
+      "segmentation": [
+        [
+          2259.819,
+          2792.888,
+          2303.475,
+          2755.288,
+          2316.315,
+          2707.342,
+          2277.795,
+          2691.931,
+          2255.539,
+          2696.212,
+          2227.291,
+          2725.322,
+          2217.019,
+          2751.007,
+          2223.011,
+          2780.973,
+          2240.987,
+          2793.815
         ]
       ]
     }
