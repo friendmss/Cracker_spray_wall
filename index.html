@@ -7,727 +7,750 @@
   <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
   <style>
-    body, html {
-      margin: 0;
-      padding: 0;
-      width: 100%;
-      height: 100%;
-      overflow: hidden;
-      background-color: #de3751;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-      -webkit-user-select: none;
-      user-select: none;
-    }
-    #root {
-      width: 100%;
-      height: 100%;
-    }
+    body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background-color: #de3751; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; -webkit-user-select: none; user-select: none; }
+    #root { width: 100%; height: 100%; }
   </style>
 </head>
 <body>
-  <div id="root"></div>
+<div id="root"></div>
+<script>
+const { useState, useRef, useEffect } = React;
+const e = React.createElement;
 
-  <script>
-	// ver 2.0
-	// Change download logic
-	
-    const { useState, useRef, useEffect } = React;
-    const e = React.createElement;
+/* 실제 프로젝트의 파일명과 일치시킨 경로 */
+const IMAGES = {
+  wallR: './Wall_R.jpg',
+  wallL: './Wall_L.jpg',
+  wallRsel: './Wall_R_sel.jpg',
+  wallLsel: './Wall_L_sel.jpg',
+  logo: './Cracker_logo.jpg',
+  back: './Back.jpg',
+  start: './Start.jpg',
+  hold: './Hold_foot.jpg',
+  top: './Top.jpg',
+  reset: './reset.jpg',
+  save: './Save.jpg'
+};
 
-    const IMAGES = {
-      wallR: "./Wall_R.jpg",
-      wallL: "./Wall_L.jpg",
-      wallRsel: "./Wall_R_sel.jpg",
-      wallLsel: "./Wall_L_sel.jpg",
-      logo: "./Cracker_logo.jpg",
-      back: "./Back.jpg",
-      start: "./Start.jpg",
-      hold: "./Hold_foot.jpg",
-      top: "./Top.jpg",
-      reset: "./reset.jpg",
-      save: "./Save.jpg"
-    };
+const ROLES = {
+  START: { id: 'START', color: '#01ff2b', label: 'Start' },
+  HOLD:  { id: 'HOLD', color: '#ffff00', label: '' },
+  TOP:   { id: 'TOP', color: '#fd49f0', label: 'Top' }
+};
 
-    const ROLES = {
-      START: { id: "START", color: "#01ff2b", label: "Start", highlight: true },
-      HOLD: { id: "HOLD", color: "#ffff00", label: "" },
-      TOP: { id: "TOP", color: "#fd49f0", label: "Top", highlight: true },
-    };
+function App() {
+  const [page, setPage] = useState(1);
+  const [currentRole, setCurrentRole] = useState('START');
+  const [enduranceMode, setEnduranceMode] = useState(false);
+  const [duplicateHoldMode, setDuplicateHoldMode] = useState(false);
+  const [selectedSegments, setSelectedSegments] = useState({
+    wallR: { nextEnduranceIndex: 1 },
+    wallL: { nextEnduranceIndex: 1 }
+  });
+  const [geoData, setGeoData] = useState({ wallR: [], wallL: [] });
+  const [imgMeta, setImgMeta] = useState({ wallR: { w: 0, h: 0 }, wallL: { w: 0, h: 0 } });
+  const imageRef = useRef(null);
+  const containerRef = useRef(null);
+  const isDragging = useRef(false);
+  const dragStart = useRef({ x: 0, y: 0 });
+  const lastTouchDist = useRef(0);
+  const [transform, setTransform] = useState({ x: 0, y: 0, scale: 0.18 });
 
-    function App() {
-      const [page, setPage] = useState(1);
-      const [currentRole, setCurrentRole] = useState("START");
-      const [selectedSegments, setSelectedSegments] = useState({
-        wallR: {},
-        wallL: {},
-      });
-      const [geoData, setGeoData] = useState({
-        wallR: [],
-        wallL: [],
-      });
-      const [imgMeta, setImgMeta] = useState({
-        wallR: { w: 0, h: 0 },
-        wallL: { w: 0, h: 0 },
-      });
+  const loadImageMeta = (src) => new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve({ w: img.naturalWidth, h: img.naturalHeight });
+    img.onerror = reject;
+    img.src = src;
+  });
 
-      const imageRef = useRef(null);
-      const containerRef = useRef(null);
-      const isDragging = useRef(false);
-      const dragStart = useRef({ x: 0, y: 0 });
-      const lastTouchDist = useRef(0);
-      const lastTouchCenter = useRef({ x: 0, y: 0 });
-
-      const [transform, setTransform] = useState({
-        x: 0,
-        y: 0,
-        scale: 0.18,
-      });
-
-      const loadImageMeta = (src) => {
-        return new Promise((resolve, reject) => {
-          const img = new Image();
-          img.onload = () => resolve({ w: img.naturalWidth, h: img.naturalHeight });
-          img.onerror = reject;
-          img.src = src;
-        });
-      };
-
-      const parseCocoData = (jsonData) => {
-        if (!jsonData || !jsonData.annotations) return [];
-        const parsedList = jsonData.annotations.map((ann) => {
-          const flatPoints = ann.segmentation?.[0] || [];
-          const pairedPoints = [];
-          for (let i = 0; i < flatPoints.length; i += 2) {
-            if (flatPoints[i] !== undefined && flatPoints[i + 1] !== undefined) {
-              pairedPoints.push([flatPoints[i], flatPoints[i + 1]]);
-            }
-          }
-
-          let area = ann.area || 0;
-          if (area === 0 && pairedPoints.length >= 3) {
-            let sum = 0;
-            for (let i = 0; i < pairedPoints.length; i++) {
-              const j = (i + 1) % pairedPoints.length;
-              sum += pairedPoints[i][0] * pairedPoints[j][1] - pairedPoints[j][0] * pairedPoints[i][1];
-            }
-            area = Math.abs(sum / 2);
-          }
-
-          return {
-            id: ann.id,
-            points: pairedPoints,
-            area,
-          };
-        });
-
-        return parsedList.sort((a, b) => b.area - a.area);
-      };
-
-      useEffect(() => {
-        const fetchAndLoadData = async () => {
-          try {
-            const metaA = await loadImageMeta(IMAGES.wallR);
-            const metaB = await loadImageMeta(IMAGES.wallL);
-            setImgMeta({ wallR: metaA, wallL: metaB });
-
-            const resA = await fetch("./Wall_R.json");
-            const dataA = await resA.json();
-
-            const resB = await fetch("./Wall_L.json");
-            const dataB = await resB.json();
-
-            setGeoData({
-              wallR: parseCocoData(dataA),
-              wallL: parseCocoData(dataB)
-            });
-          } catch (err) {
-            console.error("데이터 로드 실패:", err);
-          }
-        };
-
-        fetchAndLoadData();
-      }, []);
-
-      const currentWallKey = page === 2 ? "wallR" : "wallL";
-      const currentWallImg = page === 2 ? IMAGES.wallR : IMAGES.wallL;
-      const currentSegments = geoData[currentWallKey];
-      const currentMeta = imgMeta[currentWallKey];
-
-      const isHighlightRole = currentRole === "START" || currentRole === "TOP";
-
-      const highlightStyle = {
-        textShadow: "0 0 4px rgba(255,255,255,0.95), 0 0 10px rgba(255,255,255,0.7), 0 0 16px rgba(255,255,255,0.45)",
-        WebkitTextStroke: "1px rgba(0,0,0,0.35)",
-        paintOrder: "stroke fill",
-      };
-
-      useEffect(() => {
-        if ((page === 2 || page === 3) && currentMeta.w > 0 && currentMeta.h > 0) {
-          setTimeout(() => {
-            if (containerRef.current) {
-              const cw = containerRef.current.clientWidth;
-              const ch = containerRef.current.clientHeight;
-              const baseScale = 0.18;
-              setTransform({
-                x: cw / 2 - (currentMeta.w * baseScale) / 2,
-                y: ch / 2 - (currentMeta.h * baseScale) / 2,
-                scale: baseScale,
-              });
-            }
-          }, 50);
+  const parseCocoData = (jsonData) => {
+    if (!jsonData || !jsonData.annotations) return [];
+    const parsedList = jsonData.annotations.map(ann => {
+      const flatPoints = ann.segmentation?.[0] || [];
+      const points = [];
+      for (let i = 0; i < flatPoints.length; i += 2) {
+        if (flatPoints[i] !== undefined && flatPoints[i + 1] !== undefined) points.push([flatPoints[i], flatPoints[i + 1]]);
+      }
+      let area = ann.area || 0;
+      if (area === 0 && points.length >= 3) {
+        let sum = 0;
+        for (let i = 0; i < points.length; i++) {
+          const j = (i + 1) % points.length;
+          sum += points[i][0] * points[j][1] - points[j][0] * points[i][1];
         }
-      }, [page, currentMeta.w, currentMeta.h]);
+        area = Math.abs(sum / 2);
+      }
+      return { id: ann.id, points, area };
+    });
+    return parsedList.sort((a, b) => b.area - a.area);
+  };
 
-      const handleWheel = (e) => {
-        if (page === 1) return;
-        e.preventDefault();
+  useEffect(() => {
+    const fetchAndLoadData = async () => {
+      try {
+        const metaA = await loadImageMeta(IMAGES.wallR);
+        const metaB = await loadImageMeta(IMAGES.wallL);
+        setImgMeta({ wallR: metaA, wallL: metaB });
+        const resA = await fetch('./Wall_R.json');
+        const dataA = await resA.json();
+        const resB = await fetch('./Wall_L.json');
+        const dataB = await resB.json();
+        setGeoData({ wallR: parseCocoData(dataA), wallL: parseCocoData(dataB) });
+      } catch (err) {
+        console.error('이미지 또는 JSON 로딩 실패:', err);
+      }
+    };
+    fetchAndLoadData();
+  }, []);
+
+  const currentWallKey = page === 2 ? 'wallR' : 'wallL';
+  const currentWallImg = page === 2 ? IMAGES.wallR : IMAGES.wallL;
+  const currentSegments = geoData[currentWallKey];
+  const currentMeta = imgMeta[currentWallKey];
+  const highlightStyle = {
+    textShadow: '0 0 4px rgba(255,255,255,0.95), 0 0 10px rgba(255,255,255,0.7), 0 0 16px rgba(255,255,255,0.45)',
+    WebkitTextStroke: '1px rgba(0,0,0,0.35)',
+    paintOrder: 'stroke fill'
+  };
+
+  const getSelection = (wallSet, segId) => wallSet[segId] || null;
+  const getRoleId = value => typeof value === 'string' ? value : value?.role;
+  const getIndexes = value => value && typeof value === 'object' && Array.isArray(value.indexes) ? value.indexes : [];
+
+  useEffect(() => {
+    if ((page === 2 || page === 3) && currentMeta.w > 0 && currentMeta.h > 0) {
+      setTimeout(() => {
         if (!containerRef.current) return;
-
-        const rect = containerRef.current.getBoundingClientRect();
-        const mouseX = e.clientX - rect.left;
-        const mouseY = e.clientY - rect.top;
-        const zoomFactor = 1.15;
-        const currentScale = transform.scale;
-        let newScale = currentScale * (e.deltaY > 0 ? zoomFactor : 1 / zoomFactor);
-        newScale = Math.max(0.04, Math.min(newScale, 4));
-
-        setTransform((prev) => {
-          const imgX = (mouseX - prev.x) / currentScale;
-          const imgY = (mouseY - prev.y) / currentScale;
-          return {
-            scale: newScale,
-            x: mouseX - imgX * newScale,
-            y: mouseY - imgY * newScale,
-          };
+        const cw = containerRef.current.clientWidth;
+        const ch = containerRef.current.clientHeight;
+        const baseScale = 0.18;
+        setTransform({
+          x: cw / 2 - currentMeta.w * baseScale / 2,
+          y: ch / 2 - currentMeta.h * baseScale / 2,
+          scale: baseScale
         });
-      };
+      }, 50);
+    }
+  }, [page, currentMeta.w, currentMeta.h]);
 
-      const handleStartDrag = (e) => {
-        if (page === 1) return;
-        isDragging.current = true;
+  const handleWheel = ev => {
+    if (page === 1) return;
+    ev.preventDefault();
+    if (!containerRef.current) return;
+    const rect = containerRef.current.getBoundingClientRect();
+    const mouseX = ev.clientX - rect.left;
+    const mouseY = ev.clientY - rect.top;
+    const zoomFactor = 1.15;
+    const oldScale = transform.scale;
+    let newScale = oldScale * (ev.deltaY < 0 ? zoomFactor : 1 / zoomFactor);
+    newScale = Math.max(0.04, Math.min(newScale, 4));
+    setTransform(prev => {
+      const imgX = (mouseX - prev.x) / oldScale;
+      const imgY = (mouseY - prev.y) / oldScale;
+      return { scale: newScale, x: mouseX - imgX * newScale, y: mouseY - imgY * newScale };
+    });
+  };
 
-        if (e.touches && e.touches.length === 2) {
-          lastTouchDist.current = Math.hypot(
-            e.touches[0].clientX - e.touches[1].clientX,
-            e.touches[0].clientY - e.touches[1].clientY
-          );
-          if (containerRef.current) {
-            const rect = containerRef.current.getBoundingClientRect();
-            lastTouchCenter.current = {
-              x: (e.touches[0].clientX + e.touches[1].clientX) / 2 - rect.left,
-              y: (e.touches[0].clientY + e.touches[1].clientY) / 2 - rect.top,
+  const handleStartDrag = ev => {
+    if (page === 1) return;
+    isDragging.current = true;
+    if (ev.touches && ev.touches.length === 2) {
+      lastTouchDist.current = Math.hypot(
+        ev.touches[0].clientX - ev.touches[1].clientX,
+        ev.touches[0].clientY - ev.touches[1].clientY
+      );
+      return;
+    }
+    const clientX = ev.touches ? ev.touches[0].clientX : ev.clientX;
+    const clientY = ev.touches ? ev.touches[0].clientY : ev.clientY;
+    dragStart.current = { x: clientX - transform.x, y: clientY - transform.y };
+  };
+
+  const handleMoveDrag = ev => {
+    if (page === 1) return;
+    if (ev.touches && ev.touches.length === 2) {
+      if (!containerRef.current) return;
+      const rect = containerRef.current.getBoundingClientRect();
+      const dist = Math.hypot(
+        ev.touches[0].clientX - ev.touches[1].clientX,
+        ev.touches[0].clientY - ev.touches[1].clientY
+      );
+      const centerX = (ev.touches[0].clientX + ev.touches[1].clientX) / 2 - rect.left;
+      const centerY = (ev.touches[0].clientY + ev.touches[1].clientY) / 2 - rect.top;
+      const deltaScale = dist / lastTouchDist.current;
+      lastTouchDist.current = dist;
+      setTransform(prev => {
+        const newScale = Math.max(0.04, Math.min(prev.scale * deltaScale, 4));
+        const imgX = (centerX - prev.x) / prev.scale;
+        const imgY = (centerY - prev.y) / prev.scale;
+        return { scale: newScale, x: centerX - imgX * newScale, y: centerY - imgY * newScale };
+      });
+      return;
+    }
+    if (!isDragging.current) return;
+    const clientX = ev.touches ? ev.touches[0].clientX : ev.clientX;
+    const clientY = ev.touches ? ev.touches[0].clientY : ev.clientY;
+    setTransform(prev => ({ ...prev, x: clientX - dragStart.current.x, y: clientY - dragStart.current.y }));
+  };
+
+  const handleEndDrag = () => { isDragging.current = false; };
+
+  /*
+    지구력 모드의 HOLD 클릭 순환:
+    1회: [n]       = 한 손 홀드
+    2회: [n, n+1]  = 양손 홀드
+    3회: 삭제
+
+    다음 새 홀드는 비어 있는 가장 작은 번호를 먼저 사용합니다.
+    예: 1,2,3,4,5 생성 → 2 삭제 → 새 홀드 2 → 다음 새 홀드 6
+  */
+  const handleSegmentClick = (segId, ev) => {
+  ev.stopPropagation();
+
+  setSelectedSegments(prev => {
+    const wallSet = { ...prev[currentWallKey] };
+    const selected = getSelection(wallSet, segId);
+
+    if (enduranceMode && currentRole === 'HOLD') {
+      const usedIndexes = Object.entries(wallSet)
+        .filter(([id, value]) =>
+          id !== 'nextEnduranceIndex' &&
+          getRoleId(value) === 'HOLD'
+        )
+        .flatMap(([, value]) => getIndexes(value));
+
+      const nextIndex = wallSet.nextEnduranceIndex || 1;
+
+      /* DUP HOLD: 기존 HOLD에 다음 번호를 추가 */
+      if (duplicateHoldMode) {
+        if (getRoleId(selected) === 'HOLD') {
+          const newIndex = nextIndex;
+          const oldIndexes = getIndexes(selected);
+
+          /* 이미 같은 번호가 있는 경우만 방어 */
+          if (!oldIndexes.includes(newIndex)) {
+            wallSet[segId] = {
+              role: 'HOLD',
+              indexes: [...oldIndexes, newIndex]
             };
+            wallSet.nextEnduranceIndex = newIndex + 1;
           }
-          return;
         }
 
-        const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-        const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-        dragStart.current = {
-          x: clientX - transform.x,
-          y: clientY - transform.y,
-        };
-      };
-
-      const handleMoveDrag = (e) => {
-        if (page === 1) return;
-
-        if (e.touches && e.touches.length === 2) {
-          if (!containerRef.current) return;
-          const rect = containerRef.current.getBoundingClientRect();
-          const dist = Math.hypot(
-            e.touches[0].clientX - e.touches[1].clientX,
-            e.touches[0].clientY - e.touches[1].clientY
-          );
-          const currentCenterX = (e.touches[0].clientX + e.touches[1].clientX) / 2 - rect.left;
-          const currentCenterY = (e.touches[0].clientY + e.touches[1].clientY) / 2 - rect.top;
-          const deltaScale = dist / lastTouchDist.current;
-          lastTouchDist.current = dist;
-
-          setTransform((prev) => {
-            let newScale = prev.scale * deltaScale;
-            newScale = Math.max(0.04, Math.min(newScale, 4));
-            const imgX = (currentCenterX - prev.x) / prev.scale;
-            const imgY = (currentCenterY - prev.y) / prev.scale;
-            return {
-              scale: newScale,
-              x: currentCenterX - imgX * newScale,
-              y: currentCenterY - imgY * newScale,
-            };
-          });
-          lastTouchCenter.current = { x: currentCenterX, y: currentCenterY };
-          return;
-        }
-
-        if (!isDragging.current) return;
-
-        const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-        const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-
-        setTransform((prev) => ({
-          ...prev,
-          x: clientX - dragStart.current.x,
-          y: clientY - dragStart.current.y,
-        }));
-      };
-
-      const handleEndDrag = () => {
-        isDragging.current = false;
-      };
-
-      const handleSegmentClick = (segId, e) => {
-        e.stopPropagation();
-        setSelectedSegments((prev) => {
-          const wallSet = { ...prev[currentWallKey] };
-          if (wallSet[segId]) delete wallSet[segId];
-          else wallSet[segId] = currentRole;
-          return { ...prev, [currentWallKey]: wallSet };
-        });
-      };
-
-      const handleReset = () => {
-        setSelectedSegments((prev) => ({
-          ...prev,
-          [currentWallKey]: {}
-        }));
-      };
-
-      const handleSaveImage = () => {
-        const img = imageRef.current;
-        if (!img) {
-            alert("Save failed 1");
-            return;
-          }
-        if (!currentMeta.w || !currentMeta.h) {
-            alert("Save failed 2");
-            return;
-          }
-
-        const canvas = document.createElement("canvas");
-        canvas.width = currentMeta.w;
-        canvas.height = currentMeta.h;
-        const ctx = canvas.getContext("2d");
-
-        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-
-        ctx.fillStyle = "rgba(0,0,0,0.5)";
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-        const activeWallSelection = selectedSegments[currentWallKey] || {};
-        currentSegments.forEach((seg) => {
-          const roleId = activeWallSelection[seg.id];
-          if (!roleId) return;
-
-          const points = seg.points;
-          if (!points || points.length < 3) {
-            alert("Save failed 4");
-            return;
-          }
-
-          ctx.save();
-          ctx.beginPath();
-          ctx.moveTo(points[0][0], points[0][1]);
-          for (let i = 1; i < points.length; i++) {
-            ctx.lineTo(points[i][0], points[i][1]);
-          }
-          ctx.closePath();
-          ctx.clip();
-          ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-          ctx.restore();
-
-          ctx.save();
-          ctx.beginPath();
-          ctx.moveTo(points[0][0], points[0][1]);
-          for (let i = 1; i < points.length; i++) {
-            ctx.lineTo(points[i][0], points[i][1]);
-          }
-          ctx.closePath();
-
-          ctx.strokeStyle = "rgba(255,255,255,0.25)";
-          ctx.lineWidth = 3;
-          ctx.stroke();
-
-          ctx.strokeStyle = "#ffffff";
-          ctx.lineWidth = 5;
-          ctx.stroke();
-
-          const roleConfig = ROLES[roleId];
-          ctx.strokeStyle = roleConfig.color;
-          ctx.lineWidth = 10;
-          ctx.stroke();
-
-          if (roleConfig.label) {
-            const bottomPoint = points.reduce((maxP, p) => p[1] > maxP[1] ? p : maxP, points[0]);
-            const bottomX = bottomPoint[0];
-            const bottomY = bottomPoint[1];
-            const isLabelHighlight = roleId === "START" || roleId === "TOP";
-
-            ctx.fillStyle = roleConfig.color;
-            ctx.font = "bold 100px sans-serif";
-            ctx.textAlign = "center";
-
-            if (isLabelHighlight) {
-              ctx.shadowColor = "rgba(255,255,255,0.95)";
-              ctx.shadowBlur = 18;
-              ctx.strokeStyle = "rgba(0,0,0,0.35)";
-              ctx.lineWidth = 8;
-              ctx.strokeText(roleConfig.label, bottomX, bottomY + 100);
-            }
-
-            ctx.fillText(roleConfig.label, bottomX, bottomY + 100);
-          }
-
-          ctx.restore();
-        });
-
-        const now = new Date();
-        const year = now.getFullYear();
-        const month = String(now.getMonth() + 1).padStart(2, '0');
-        const date = String(now.getDate()).padStart(2, '0');
-        const hours = String(now.getHours()).padStart(2, '0');
-        const minutes = String(now.getMinutes()).padStart(2, '0');
-        const seconds = String(now.getSeconds()).padStart(2, '0');
-
-        const timeStamp = year + month + date + "_" + hours + minutes + seconds;
-        const fileName = "Cracker_" + currentWallKey + "_" + timeStamp + ".jpg";
-
-        try {
-          canvas.toBlob((blob) => {
-            if (!blob) {
-              alert("Save failed: Empty canvas");
-              return;
-            }
-
-            const file = new File([blob], fileName, { type: "image/jpeg" });
-
-            const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || 
-                          (navigator.userAgent.includes("Mac") && "ontouchend" in document);
-
-            // iOS이면서 Web Share API를 지원하는 경우에만 공유 팝업 띄우기
-            if (isIOS && navigator.canShare && navigator.canShare({ files: [file] })) {
-              navigator.share({
-                files: [file],
-                title: fileName
-              }).catch((err) => {
-                console.log("Share cancelled or failed", err);
-              });
-            } else {
-              // PC, 안드로이드 등 나머지 환경에서는 바로 다운로드
-              const objectUrl = URL.createObjectURL(blob);
-              const link = document.createElement("a");
-              link.href = objectUrl;
-              link.download = fileName;
-              
-              document.body.appendChild(link);
-              link.click();
-              document.body.removeChild(link);
-              
-              URL.revokeObjectURL(objectUrl);
-            }
-          }, "image/jpeg", 0.95);
-        } catch (err) {
-          alert("Save failed");
-        }
-      };
-
-      if ((page === 2 || page === 3) && currentMeta.w === 0) {
-        return e("div", { style: styles.appContainer }, e("div", { style: { color: "#fff", padding: 20 } }, "Loading images..."));
+        return { ...prev, [currentWallKey]: wallSet };
       }
 
-      const menuContent =
-        page === 1
-          ? e(
-              "div",
-              { style: styles.menuPage },
-              e(
-                "div",
-                { style: styles.menuGrid },
-                e("div", { style: styles.card, onClick: () => setPage(2) }, e("img", { src: IMAGES.wallRsel, alt: "Spray Wall A", style: styles.cardImage })),
-                e("div", { style: styles.card, onClick: () => setPage(3) }, e("img", { src: IMAGES.wallLsel, alt: "Spray Wall B", style: styles.cardImage }))
-              )
-            )
-          : null;
+      /* 일반 HOLD 클릭: 한 손 → 양손 → 삭제 */
+      const firstFreeIndex = Array.from(
+        { length: Math.max(nextIndex, 1) },
+        (_, i) => i + 1
+      ).find(index => !usedIndexes.includes(index));
 
-      const editorContent =
-      (page === 2 || page === 3) && currentMeta.w > 0 && currentMeta.h > 0
-        ? e(
-            "div",
-            { style: styles.editorPage },
-            e(
-              "div",
-              { style: styles.topMenuBar },
-              e("button", { onClick: () => setPage(1), style: styles.navButton }, e("img", { src: IMAGES.back, alt: "Back", style: styles.btnImg })),
-              e("button", { onClick: () => setCurrentRole("START"), style: Object.assign({}, styles.navButton, currentRole === "START" ? styles.activeBtn : {}) }, e("img", { src: IMAGES.start, alt: "Start", style: styles.btnImg })),
-              e("button", { onClick: () => setCurrentRole("HOLD"), style: Object.assign({}, styles.navButton, currentRole === "HOLD" ? styles.activeBtn : {}) }, e("img", { src: IMAGES.hold, alt: "Hold", style: styles.btnImg })),
-              e("button", { onClick: () => setCurrentRole("TOP"), style: Object.assign({}, styles.navButton, currentRole === "TOP" ? styles.activeBtn : {}) }, e("img", { src: IMAGES.top, alt: "Top", style: styles.btnImg })),
-              e("button", { onClick: handleReset, style: styles.navButton }, e("img", { src: IMAGES.reset, alt: "Reset", style: styles.btnImg })),
-              e("button", { onClick: handleSaveImage, style: styles.navButton }, e("img", { src: IMAGES.save, alt: "Save", style: styles.btnImg }))
-            ),
-            e(
-              "div",
-              {
-                ref: containerRef,
-                style: styles.canvasContainer,
-                onWheel: handleWheel,
-                onMouseDown: handleStartDrag,
-                onMouseMove: handleMoveDrag,
-                onMouseUp: handleEndDrag,
-                onMouseLeave: handleEndDrag,
-                onTouchStart: handleStartDrag,
-                onTouchMove: handleMoveDrag,
-                onTouchEnd: handleEndDrag,
+      if (getRoleId(selected) !== 'HOLD') {
+        const index = firstFreeIndex || nextIndex;
+        wallSet[segId] = { role: 'HOLD', indexes: [index] };
+        if (index >= nextIndex) {
+          wallSet.nextEnduranceIndex = index + 1;
+        }
+      } else if (getIndexes(selected).length === 1) {
+        const firstIndex = getIndexes(selected)[0];
+        const secondIndex = firstIndex + 1;
+        const holderOfSecond = Object.entries(wallSet).find(([id, value]) =>
+          id !== segId &&
+          id !== 'nextEnduranceIndex' &&
+          getRoleId(value) === 'HOLD' &&
+          getIndexes(value).includes(secondIndex)
+        );
+
+        if (holderOfSecond) {
+          alert(
+            `${secondIndex}번은 이미 다른 HOLD에 사용 중입니다. ` +
+            `양손 홀드로 변경하려면 해당 번호의 HOLD를 먼저 삭제하세요.`
+          );
+        } else {
+          wallSet[segId] = {
+            role: 'HOLD',
+            indexes: [firstIndex, secondIndex]
+          };
+          if (secondIndex >= nextIndex) {
+            wallSet.nextEnduranceIndex = secondIndex + 1;
+          }
+        }
+      } else {
+        delete wallSet[segId];
+      }
+    } else {
+      if (selected) delete wallSet[segId];
+      else wallSet[segId] = currentRole;
+    }
+
+    return { ...prev, [currentWallKey]: wallSet };
+  });
+
+  if (duplicateHoldMode) {
+    setDuplicateHoldMode(false);
+  }
+};
+
+  const handleReset = () => {
+    setSelectedSegments(prev => ({
+      ...prev,
+      [currentWallKey]: { nextEnduranceIndex: 1 }
+    }));
+  };
+
+  const drawLabelOnCanvas = (ctx, points, roleId, indexes) => {
+    const role = ROLES[roleId];
+    if (!role) return;
+    const label = roleId === 'HOLD' ? indexes.join(', ') : role.label;
+    if (!label) return;
+    const bottomPoint = points.reduce((maxP, p) => p[1] > maxP[1] ? p : maxP, points[0]);
+    const x = bottomPoint[0]+10;
+    const y = bottomPoint[1]+10;
+    const isHighlight = roleId === 'START' || roleId === 'TOP';
+    ctx.save();
+    ctx.fillStyle = role.color;
+    ctx.font = 'bold 70px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.strokeStyle = isHighlight ? 'rgba(0,0,0,0.35)' : 'rgba(0,0,0,0.75)';
+    ctx.lineWidth = isHighlight ? 8 : 7;
+    if (isHighlight) { ctx.shadowColor = 'rgba(255,255,255,0.95)'; ctx.shadowBlur = 18; }
+    ctx.strokeText(label, x, y);
+    ctx.fillText(label, x, y);
+    ctx.restore();
+  };
+
+  const handleSaveImage = () => {
+    const img = imageRef.current;
+    if (!img) { alert('Save failed 1'); return; }
+    if (!currentMeta.w || !currentMeta.h) { alert('Save failed 2'); return; }
+    const canvas = document.createElement('canvas');
+    canvas.width = currentMeta.w;
+    canvas.height = currentMeta.h;
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = 'rgba(0,0,0,0.5)';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    const wallSet = selectedSegments[currentWallKey] || {};
+
+    currentSegments.forEach(seg => {
+      const selected = getSelection(wallSet, seg.id);
+      const roleId = getRoleId(selected);
+      if (!roleId || !seg.points || seg.points.length < 3) return;
+      const points = seg.points;
+      ctx.save();
+      ctx.beginPath();
+      ctx.moveTo(points[0][0], points[0][1]);
+      for (let i = 1; i < points.length; i++) ctx.lineTo(points[i][0], points[i][1]);
+      ctx.closePath();
+      ctx.clip();
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      ctx.restore();
+      ctx.save();
+      ctx.beginPath();
+      ctx.moveTo(points[0][0], points[0][1]);
+      for (let i = 1; i < points.length; i++) ctx.lineTo(points[i][0], points[i][1]);
+      ctx.closePath();
+      ctx.strokeStyle = 'rgba(255,255,255,0.25)'; ctx.lineWidth = 3; ctx.stroke();
+      ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 5; ctx.stroke();
+      ctx.strokeStyle = ROLES[roleId].color; ctx.lineWidth = 10; ctx.stroke();
+      drawLabelOnCanvas(ctx, points, roleId, getIndexes(selected));
+    });
+
+    const now = new Date();
+    const stamp = now.getFullYear() + String(now.getMonth() + 1).padStart(2, '0') + String(now.getDate()).padStart(2, '0') + String(now.getHours()).padStart(2, '0') + String(now.getMinutes()).padStart(2, '0') + String(now.getSeconds()).padStart(2, '0');
+    const fileName = `Cracker_${currentWallKey}_${stamp}.jpg`;
+    canvas.toBlob(blob => {
+      if (!blob) { alert('Save failed: Empty canvas'); return; }
+      const file = new File([blob], fileName, { type: 'image/jpeg' });
+      const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.userAgent.includes('Mac') && 'ontouchend' in document);
+      if (isIOS && navigator.canShare && navigator.canShare({ files: [file] })) {
+        navigator.share({ files: [file], title: fileName }).catch(() => {});
+      } else {
+        const objectUrl = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = objectUrl;
+        link.download = fileName;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(objectUrl);
+      }
+    }, 'image/jpeg', 0.95);
+  };
+
+  
+  const menuContent = page === 1 ? e('div', { style: styles.menuPage },
+    e('div', { style: styles.menuGrid },
+      e('div', { style: styles.card, onClick: () => setPage(2) }, e('img', { src: IMAGES.wallRsel, alt: 'Right Spray Wall', style: styles.cardImage })),
+      e('div', { style: styles.card, onClick: () => setPage(3) }, e('img', { src: IMAGES.wallLsel, alt: 'Left Spray Wall', style: styles.cardImage }))
+    )
+  ) : null;
+
+  const editorContent =
+  (page === 2 || page === 3) &&
+  currentMeta.w > 0 &&
+  currentMeta.h > 0
+    ? e(
+        'div',
+        { style: styles.editorPage },
+
+        e(
+          'div',
+          { style: styles.topMenuBar },
+
+          e(
+            'button',
+            { onClick: () => setPage(1), style: styles.navButton },
+            e('img', {
+              src: IMAGES.back,
+              alt: 'Back',
+              style: styles.btnImg
+            })
+          ),
+
+          e(
+            'button',
+            {
+              onClick: () => setCurrentRole('START'),
+              style: Object.assign(
+                {},
+                styles.navButton,
+                currentRole === 'START' ? styles.activeBtn : {}
+              )
+            },
+            e('img', {
+              src: IMAGES.start,
+              alt: 'Start',
+              style: styles.btnImg
+            })
+          ),
+
+          e(
+            'button',
+            {
+              onClick: () => setCurrentRole('HOLD'),
+              style: Object.assign(
+                {},
+                styles.navButton,
+                currentRole === 'HOLD' ? styles.activeBtn : {}
+              )
+            },
+            e('img', {
+              src: IMAGES.hold,
+              alt: 'Hold & Foot',
+              style: styles.btnImg
+            })
+          ),
+
+          e(
+            'button',
+            {
+              onClick: () => setCurrentRole('TOP'),
+              style: Object.assign(
+                {},
+                styles.navButton,
+                currentRole === 'TOP' ? styles.activeBtn : {}
+              )
+            },
+            e('img', {
+              src: IMAGES.top,
+              alt: 'Top',
+              style: styles.btnImg
+            })
+          ),
+
+          e(
+            'button',
+            { onClick: handleReset, style: styles.navButton },
+            e('img', {
+              src: IMAGES.reset,
+              alt: 'Reset',
+              style: styles.btnImg
+            })
+          ),
+
+          e(
+            'button',
+            { onClick: handleSaveImage, style: styles.navButton },
+            e('img', {
+              src: IMAGES.save,
+              alt: 'Save',
+              style: styles.btnImg
+            })
+          ),
+		  e(
+            'button',
+            {
+              onClick: () => setEnduranceMode(value => !value),
+              style: Object.assign(
+                {},
+                styles.enduranceButton,
+                enduranceMode ? styles.enduranceButtonOn : {}
+              )
+            },
+            enduranceMode ? '지구력 모드\nON' : '지구력 모드\nOFF'
+          ),
+		  e(
+			  'button',
+			  {
+				onClick: () => setDuplicateHoldMode(value => !value),
+				style: Object.assign(
+				  {},
+				  styles.duplicateHoldButton,
+				  duplicateHoldMode ? styles.duplicateHoldButtonOn : {}
+				)
+			  },
+			  duplicateHoldMode ? '중복홀드\nON' : '중복홀드\nHOLD'
+			)
+		  
+        ),
+		
+		
+
+        e(
+          'div',
+          {
+            ref: containerRef,
+            style: styles.canvasContainer,
+            onWheel: handleWheel,
+            onMouseDown: handleStartDrag,
+            onMouseMove: handleMoveDrag,
+            onMouseUp: handleEndDrag,
+            onMouseLeave: handleEndDrag,
+            onTouchStart: handleStartDrag,
+            onTouchMove: handleMoveDrag,
+            onTouchEnd: handleEndDrag
+          },
+
+          e(
+            'div',
+            {
+              style: {
+                transform: `translate(${transform.x}px, ${transform.y}px) scale(${transform.scale})`,
+                transformOrigin: '0 0',
+                position: 'relative',
+                transition: isDragging.current
+                  ? 'none'
+                  : 'transform 0.05s ease-out',
+                width: `${currentMeta.w}px`,
+                height: `${currentMeta.h}px`
+              }
+            },
+
+            e('img', {
+              ref: imageRef,
+              src: currentWallImg,
+              alt: 'Base Wall',
+              style: {
+                display: 'block',
+                userSelect: 'none',
+                width: `${currentMeta.w}px`,
+                height: `${currentMeta.h}px`
               },
+              draggable: false
+            }),
+
+            e(
+              'svg',
+              {
+                style: styles.svgOverlay,
+                viewBox: `0 0 ${currentMeta.w} ${currentMeta.h}`,
+                preserveAspectRatio: 'none'
+              },
+
               e(
-                "div",
-                {
-                  style: {
-                    transform: `translate(${transform.x}px, ${transform.y}px) scale(${transform.scale})`,
-                    transformOrigin: "0 0",
-                    position: "relative",
-                    transition: isDragging.current ? "none" : "transform 0.05s ease-out",
-                    width: `${currentMeta.w}px`,
-                    height: `${currentMeta.h}px`,
-                  },
-                },
-                e("img", {
-                  ref: imageRef,
-                  src: currentWallImg,
-                  alt: "Base Wall",
-                  style: {
-                    display: "block",
-                    userSelect: "none",
-                    width: `${currentMeta.w}px`,
-                    height: `${currentMeta.h}px`,
-                  },
-                  draggable: false,
-                }),
+                'defs',
+                null,
+
                 e(
-                  "svg",
-                  {
-                    style: styles.svgOverlay,
-                    viewBox: `0 0 ${currentMeta.w} ${currentMeta.h}`,
-                    preserveAspectRatio: "none",
-                  },
-                  e(
-                    "defs",
-                    null,
-                    e(
-                      "mask",
-                      { id: `holdMask-${currentWallKey}` },
-                      e("rect", {
-                        x: 0,
-                        y: 0,
-                        width: currentMeta.w,
-                        height: currentMeta.h,
-                        fill: "white",
-                      }),
-                      currentSegments.map((seg) => {
-                        const selectedRole = selectedSegments[currentWallKey][seg.id];
-                        if (!selectedRole) return null;
-                        const pointsStr = seg.points.map((p) => `${p[0]},${p[1]}`).join(" ");
-                        return e("polygon", {
-                          key: `mask-${seg.id}`,
-                          points: pointsStr,
-                          fill: "black",
-                        });
-                      })
-                    )
-                  ),
-                  e("rect", {
+                  'mask',
+                  { id: `holdMask-${currentWallKey}` },
+
+                  e('rect', {
                     x: 0,
                     y: 0,
                     width: currentMeta.w,
                     height: currentMeta.h,
-                    fill: "rgba(0,0,0,0.5)",
-                    mask: `url(#holdMask-${currentWallKey})`,
+                    fill: 'white'
                   }),
-                  currentSegments.map((seg) => {
-                    const selectedRole = selectedSegments[currentWallKey][seg.id];
-                    const pointsStr = seg.points.map((p) => `${p[0]},${p[1]}`).join(" ");
-                    const bottomPoint = seg.points.reduce((maxP, p) => p[1] > maxP[1] ? p : maxP, seg.points[0]);
-                    const bottomX = bottomPoint[0];
-                    const bottomY = bottomPoint[1];
-                    const isSelectedHighlight = selectedRole === "START" || selectedRole === "TOP";
 
-                    return e(
-                      "g",
-                      {
-                        key: seg.id,
-                        onClick: (ev) => handleSegmentClick(seg.id, ev),
-                        style: { cursor: "pointer" },
-                      },
-                      selectedRole
-                        ? [
-                            e("polygon", {
-                              key: "a",
-                              points: pointsStr,
-                              fill: "rgba(255,255,255,0.01)",
-                              stroke: "rgba(255,255,255,0.25)",
-                              strokeWidth: 3,
-                            }),
-                            e("polygon", {
-                              key: "b",
-                              points: pointsStr,
-                              fill: "none",
-                              stroke: "#ffffff",
-                              strokeWidth: 3,
-                            }),
-                            e("polygon", {
-                              key: "c",
-                              points: pointsStr,
-                              fill: "none",
-                              stroke: ROLES[selectedRole].color,
-                              strokeWidth: 3,
-                            }),
-                            ROLES[selectedRole].label
-                              ? e(
-                                  "text",
-                                  {
-                                    key: "d",
-                                    x: bottomX,
-                                    y: bottomY + 80,
-                                    fill: ROLES[selectedRole].color,
-                                    fontSize: 100,
-                                    fontWeight: "bold",
-                                    style: Object.assign(
-                                      { textAnchor: "middle" },
-                                      isSelectedHighlight ? highlightStyle : {}
-                                    ),
-                                  },
-                                  ROLES[selectedRole].label
-                                )
-                              : null,
-                          ]
-                        : e("polygon", {
-                            points: pointsStr,
-                            fill: "rgba(255,255,255,0.01)",
-                            stroke: "rgba(255,255,255,0.35)",
-                            strokeWidth: 3,
-                          })
+                  currentSegments.map(seg => {
+                    const selected = getSelection(
+                      selectedSegments[currentWallKey],
+                      seg.id
                     );
+
+                    const roleId = getRoleId(selected);
+
+                    if (!roleId) return null;
+
+                    return e('polygon', {
+                      key: `mask-${seg.id}`,
+                      points: seg.points.map(p => p.join(',')).join(' '),
+                      fill: 'black'
+                    });
                   })
                 )
-              )
+              ),
+
+              e('rect', {
+                x: 0,
+                y: 0,
+                width: currentMeta.w,
+                height: currentMeta.h,
+                fill: 'rgba(0,0,0,0.5)',
+                mask: `url(#holdMask-${currentWallKey})`
+              }),
+
+              currentSegments.map(seg => {
+                const selected = getSelection(
+                  selectedSegments[currentWallKey],
+                  seg.id
+                );
+
+                const roleId = getRoleId(selected);
+                const indexes = getIndexes(selected);
+                const pointsStr = seg.points
+                  .map(p => p.join(','))
+                  .join(' ');
+
+                const bottomPoint = seg.points.reduce(
+                  (maxP, p) => (p[1] > maxP[1] ? p : maxP),
+                  seg.points[0]
+                );
+
+                const label =
+                  roleId === 'HOLD'
+                    ? indexes.join(', ')
+                    : roleId
+                    ? ROLES[roleId].label
+                    : '';
+
+                const highlight =
+                  roleId === 'START' || roleId === 'TOP';
+
+                return e(
+                  'g',
+                  {
+                    key: seg.id,
+                    onClick: ev => handleSegmentClick(seg.id, ev),
+                    style: { cursor: 'pointer' }
+                  },
+
+                  roleId
+                    ? [
+                        e('polygon', {
+                          key: 'a',
+                          points: pointsStr,
+                          fill: 'rgba(255,255,255,0.01)',
+                          stroke: 'rgba(255,255,255,0.25)',
+                          strokeWidth: 3
+                        }),
+
+                        e('polygon', {
+                          key: 'b',
+                          points: pointsStr,
+                          fill: 'none',
+                          stroke: '#ffffff',
+                          strokeWidth: 3
+                        }),
+
+                        e('polygon', {
+                          key: 'c',
+                          points: pointsStr,
+                          fill: 'none',
+                          stroke: ROLES[roleId].color,
+                          strokeWidth: 3
+                        }),
+
+                        label
+                          ? e(
+                              'text',
+                              {
+                                key: 'd',
+                                x: bottomPoint[0]+10,
+                                y: bottomPoint[1]+30,
+                                fill: ROLES[roleId].color,
+                                fontSize: 70,
+                                fontWeight: 'bold',
+                                style: Object.assign(
+                                  {
+                                    textAnchor: 'middle',
+                                    paintOrder: 'stroke fill',
+                                    stroke: highlight
+                                      ? 'rgba(0,0,0,0.35)'
+                                      : 'rgba(0,0,0,0.75)',
+                                    strokeWidth: highlight ? 1 : 7
+                                  },
+                                  highlight ? highlightStyle : {}
+                                )
+                              },
+                              label
+                            )
+                          : null
+                      ]
+                    : e('polygon', {
+                        points: pointsStr,
+                        fill: 'rgba(255,255,255,0.01)',
+                        stroke: 'rgba(255,255,255,0.35)',
+                        strokeWidth: 3
+                      })
+                );
+              })
             )
           )
-        : null;
+        )
+      )
+    : null;
 
-      return e(
-        "div",
-        { style: styles.appContainer },
-        menuContent,
-        editorContent,
-        e("div", { style: styles.footerBar }, e("img", { src: IMAGES.logo, alt: "CRACKER CLIMBING", style: styles.logoImage }))
-      );
-    }
+  return e('div', { style: styles.appContainer }, menuContent, editorContent,
+    e('div', { style: styles.footerBar }, e('img', { src: IMAGES.logo, alt: 'CRACKER CLIMBING', style: styles.logoImage }))
+  );
+}
 
-    const styles = {
-      appContainer: {
-        width: "100vw",
-        height: "100vh",
-        backgroundColor: "#de3751",
-        display: "flex",
-        flexDirection: "column",
-        overflow: "hidden",
-        position: "relative",
-      },
-      menuPage: {
-        flex: 1,
-        display: "flex",
-        justifyContent: "center",
-        alignItems: "center",
-        padding: "20px",
-      },
-      menuGrid: {
-        display: "flex",
-        flexDirection: "column",
-        gap: "20px",
-        width: "100%",
-        maxWidth: "400px",
-      },
-      card: {
-        backgroundColor: "transparent",
-        overflow: "hidden",
-        cursor: "pointer",
-        border: "none",
-        textAlign: "center",
-        borderRadius: "0px",
-      },
-      cardImage: {
-        width: "100%",
-        height: "auto",
-        maxHeight: "350px",
-        objectFit: "contain",
-        display: "block",
-        borderRadius: "0px",
-      },
-      editorPage: {
-        flex: 1,
-        display: "flex",
-        flexDirection: "column",
-        overflow: "hidden",
-      },
-      topMenuBar: {
-        display: "flex",
-        width: "100%",
-        backgroundColor: "#de3751",
-        height: "60px",
-        borderBottom: "1px solid rgba(255, 255, 255, 0.15)",
-      },
-      navButton: {
-        flex: 1,
-        height: "100%",
-        border: "none",
-        backgroundColor: "transparent",
-        cursor: "pointer",
-        display: "flex",
-        justifyContent: "center",
-        alignItems: "center",
-        padding: "4px",
-        borderBottom: "4px solid transparent",
-        boxSizing: "border-box",
-      },
-      activeBtn: {
-        borderBottom: "4px solid #fff",
-        backgroundColor: "rgba(255,255,255,0.2)",
-      },
-      btnImg: {
-        maxHeight: "100%",
-        maxWidth: "100%",
-        objectFit: "contain",
-      },
-      canvasContainer: {
-        flex: 1,
-        overflow: "hidden",
-        position: "relative",
-        backgroundColor: "#de3751",
-        touchAction: "none",
-      },
-      svgOverlay: {
-        position: "absolute",
-        top: 0,
-        left: 0,
-        width: "100%",
-        height: "100%",
-      },
-      footerBar: {
-        height: "4vh",
-        minHeight: "28px",
-        maxHeight: "40px",
-        backgroundColor: "#de3751",
-        display: "flex",
-        justifyContent: "center",
-        alignItems: "center",
-        paddingBottom: "4px",
-      },
-      logoImage: {
-        height: "85%",
-        objectFit: "contain",
-      },
-    };
+const styles = {
+  appContainer: { width: '100vw', height: '100vh', backgroundColor: '#de3751', display: 'flex', flexDirection: 'column', overflow: 'hidden', position: 'relative' },
+  menuPage: { flex: 1, display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '20px' },
+  menuGrid: { display: 'flex', flexDirection: 'column', gap: '20px', width: '100%', maxWidth: '400px' },
+  card: { backgroundColor: 'transparent', overflow: 'hidden', cursor: 'pointer', border: 'none', textAlign: 'center', borderRadius: '0px' },
+  cardImage: { width: '100%', height: 'auto', maxHeight: '350px', objectFit: 'contain', display: 'block', borderRadius: '0px' },
+  editorPage: { flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' },
+  topMenuBar: { display: 'flex', width: '100%', backgroundColor: '#de3751', height: '60px', borderBottom: '1px solid rgba(255,255,255,0.15)' },
+  navButton: { flex: 1, height: '100%', border: 'none', backgroundColor: 'transparent', cursor: 'pointer', display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '4px', borderBottom: '4px solid transparent', boxSizing: 'border-box' },
+  activeBtn: { borderBottom: '4px solid #fff', backgroundColor: 'rgba(255,255,255,0.2)' },
+  enduranceButton: { flex: '1.05', height: '100%', whiteSpace: 'pre-line', border: 'none', backgroundColor: '#de3751', color: '#fff', cursor: 'pointer', fontSize: '10px', lineHeight: '13px', fontWeight: '800', letterSpacing: '0.15px', padding: '2px', boxSizing: 'border-box' },
+  enduranceButtonOn: { backgroundColor: '#9d2062', color: '#222', borderColor: '#9d2062' },
+  duplicateHoldButton: {
+  flex: '1.05',
+  height: '100%',
+  whiteSpace: 'pre-line',
+  border: 'none',
+  backgroundColor: '#de3751',
+  color: '#fff',
+  cursor: 'pointer',
+  fontSize: '10px',
+  lineHeight: '13px',
+  fontWeight: '800',
+  letterSpacing: '0.15px',
+  padding: '2px',
+  boxSizing: 'border-box'
+	},
+	duplicateHoldButtonOn: {
+	  backgroundColor: '#9d2062',
+	  color: '#222',
+	  borderColor: '#9d2062'
+	},
+  btnImg: { maxHeight: '100%', maxWidth: '100%', objectFit: 'contain' },
+  canvasContainer: { flex: 1, overflow: 'hidden', position: 'relative', backgroundColor: '#de3751', touchAction: 'none' },
+  svgOverlay: { position: 'absolute', top: 0, left: 0, width: '100%', height: '100%' },
+  footerBar: { height: '4vh', minHeight: '28px', maxHeight: '40px', backgroundColor: '#de3751', display: 'flex', justifyContent: 'center', alignItems: 'center', paddingBottom: '4px' },
+  logoImage: { height: '85%', objectFit: 'contain' }
+};
 
-    const root = ReactDOM.createRoot(document.getElementById("root"));
-    root.render(e(App));
-  </script>
+const root = ReactDOM.createRoot(document.getElementById('root'));
+root.render(e(App));
+</script>
 </body>
 </html>
